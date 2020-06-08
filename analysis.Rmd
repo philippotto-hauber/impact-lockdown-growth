@@ -1,1 +1,33 @@
+---
+title: "Covid-19 lockdown measures and GDP growth"
+output: html_notebook
+---
+
+# GDP growth in Q1
+
+## Bundesbank data
+
+```{r}
+library(bundesbank)
+
+var_codes <- c("BBNZ1.Q.DE.Y.H.0000.A",
+               "BBXN1.Q.BE.N.NAG.B1QG00.0000.Z0N.IND.I00",
+               "BBXN1.Q.FR.N.NAG.B1QG00.0000.Z0N.IND.I00"
+               )
+countries <- c("Germany", 
+               "Belgium", 
+               "France"
+               )
+
+df <- data.frame()
+for (i in seq(1, length(var_codes)))
+{
+  tmp <- getSeries(var_codes[i], start = "2019-09", end = "2020-03")
+
+
+  df <- rbind(df, data.frame(gdpQ1 = tmp[2, 2] / tmp[1, 2] * 100 - 100, 
+                             country = countries[i]))
+}
+```
+
 
