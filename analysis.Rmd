@@ -12,6 +12,10 @@ options(scipen = 999)
 library(bundesbank)
 library(rdbnomics)
 library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(readr) # parse_double
+library(ggrepel)
 ```
 
 # GDP growth in Q1
@@ -51,6 +55,7 @@ for (i in seq(1, length(codes_Bbk)))
   if (countries_Bbk[i] == "China") # China already in q/q growth rate!
   {
       tmp <- getSeries(codes_Bbk[i], start = "2020-01", end = "2020-03")
+      
 
 
       df <- rbind(df, data.frame(gdpQ1 = tmp[1, 2], 
@@ -60,7 +65,7 @@ for (i in seq(1, length(codes_Bbk)))
   else 
   {
       tmp <- getSeries(codes_Bbk[i], start = "2019-09", end = "2020-03")
-
+      #tmp$values <- parse_double(tmp$values)
 
       df <- rbind(df, data.frame(gdpQ1 = round(tmp[2, 2] / tmp[1, 2] * 100 - 100, digits = 1), 
                                  country = countries_Bbk[i]))
@@ -112,13 +117,75 @@ for (i in seq(1, length(codes_dbnomics)))
 {
   
     rdb(provider_code = paste0("Eurostat/teina011/Q.B1GQ.PCH_Q1_SCA.", codes_dbnomics[i])) %>%
-                        filter(original_period == "2020-Q1") %>% 
+                        filter(original_period == "2020-Q1") %>%
+                        mutate(original_value = parse_double(original_value)) %>%
                         select(original_value, `Geopolitical entity (reporting)`) -> tmp2
 
     df <- rbind(df, data.frame(gdpQ1 = tmp2$original_value, country = tmp2$`Geopolitical entity (reporting)`))
 }
 ```
 
+# Stringency index
 
+## Load raw data and select the relevant indicators
+
+```{r}
+rawdata_string <- read.csv("https://github.com/OxCGRT/covid-policy-tracker/raw/master/data/OxCGRT_latest.csv")
+
+
+df_string <- rawdata_string %>% 
+             mutate(Date = ymd(Date)) %>% 
+             select(CountryName, ConfirmedDeaths, StringencyIndex, Date) 
+```
+
+## Calculate average index value for the 2020Q1
+
+```{r}
+df_string_avgQ1 <- df_string %>% 
+                   filter(Date <= "2020-03-31") %>%
+                   group_by(CountryName) %>%
+                   summarise(avgQ1 = mean(StringencyIndex))
+```
+
+# Analysis
+
+## Merge two datasets
+
+```{r}
+df <- merge(df, df_string_avgQ1, by.x = "country", by.y = "CountryName")
+```
+
+
+## Plot
+
+```{r}
+
+ggplot(data = df, aes(x = avgQ1, y = gdpQ1))+
+  geom_point()+
+  geom_point(data = filter(df, country %in%  c("Italy", "China", "Sweden", "South Korea", "Germany")),
+                   aes(x = avgQ1, y = gdpQ1), color = "red")+
+  geom_label(data = filter(df, country %in%  c("Italy", "China", "Sweden", "South Korea")),
+                   aes(label = country),
+                   nudge_x = 1.5, nudge_y = 0.7, size = 3)+
+    geom_label(data = filter(df, country %in%  c("Germany")),
+                   aes(label = country),
+                   nudge_x = 3.0, nudge_y = -0.5, size = 3)+
+  scale_x_continuous(breaks = seq(0, 60, 10))+
+  labs(x = "index",
+       y = "percent",
+       title = "Lockdown measures and economic activity",
+       subtitle = "Average stringency index vs. q/q GDP growth in the first quarter of 2020",
+       caption = "Data for 28 advanced and emerging economies.\n Stringency index:higher values indicate more stringent lockdown measures, GDP: seasonally and calendar adjusted. \n Source: Hale, Thomas, Sam Webster, Anna Petherick, Toby Phillips and Beatriz Kira (2020);\n Eurostat, Deutsche Bundesbank, national statistical authorities.")
+```
+
+
+## Regression
+
+```{r}
+model <- lm(gdpQ1 ~ avgQ1, df)
+summary(model)
+model_ex_china <- lm(gdpQ1 ~ avgQ1, filter(df, country != "China"))
+summary(model_ex_china)
+```
 
 
