@@ -3,31 +3,122 @@ title: "Covid-19 lockdown measures and GDP growth"
 output: html_notebook
 ---
 
+# Housekeeping & packages
+
+```{r}
+rm(list = ls())
+cat("\014")
+options(scipen = 999)
+library(bundesbank)
+library(rdbnomics)
+library(dplyr)
+```
+
 # GDP growth in Q1
 
 ## Bundesbank data
 
 ```{r}
-library(bundesbank)
+codes_Bbk <- c("BBNZ1.Q.DE.Y.H.0000.A",
+               "BBXN1.Q.AU.Y.NAG.B1QG00.0000.Z0N.CPC.I00",
+               "BBXN1.Q.BR.S.NAG.B1QG00.0000.Z0N.IND.I00",
+               "BBXN1.Q.CN.S.NAG.B1QG00.0000.Z0N.PER.I00",
+               "BBXN1.Q.IN00.S.NAG.B1QG00.0000.Z0N.CPF.I00",
+               "BBXN1.Q.JP.S.NAG.B1QG00.0000.Z0N.CPC.I00",
+               "BBXN1.Q.JP.N.NAG.B1QG00.0000.Z0N.CPC.I00",
+               "BBXN1.Q.CA.S.NAG.B1QG00.0000.Z0N.CPC.I00",
+               "BBXN1.Q.KR.Y.NAG.B1QG00.0000.Z0N.CPC.I00",
+               "BBXN1.Q.RU00.S.NAG.B1QG00.0000.Z0N.CPC.I00",
+               "BBXN1.Q.GB.Y.NAG.B1QG00.0000.Z0N.CPC.I00",
+               "BBXN1.Q.US.S.NAG.B1QG00.0000.Z0N.IND.I00")
 
-var_codes <- c("BBNZ1.Q.DE.Y.H.0000.A",
-               "BBXN1.Q.BE.N.NAG.B1QG00.0000.Z0N.IND.I00",
-               "BBXN1.Q.FR.N.NAG.B1QG00.0000.Z0N.IND.I00"
-               )
-countries <- c("Germany", 
-               "Belgium", 
-               "France"
-               )
-
+countries_Bbk <- c("Germany", 
+               "Australia",
+               "Brazil",
+               "China",
+               "India",
+               "Russia",
+               "Japan",
+               "Canada",
+               "South Korea",
+               "Russia",
+               "United Kingdom",
+               "United States")
+               
 df <- data.frame()
-for (i in seq(1, length(var_codes)))
+for (i in seq(1, length(codes_Bbk)))
 {
-  tmp <- getSeries(var_codes[i], start = "2019-09", end = "2020-03")
+  if (countries_Bbk[i] == "China") # China already in q/q growth rate!
+  {
+      tmp <- getSeries(codes_Bbk[i], start = "2020-01", end = "2020-03")
 
 
-  df <- rbind(df, data.frame(gdpQ1 = tmp[2, 2] / tmp[1, 2] * 100 - 100, 
-                             country = countries[i]))
+      df <- rbind(df, data.frame(gdpQ1 = tmp[1, 2], 
+                             country = countries_Bbk[i]))
+    
+  }
+  else 
+  {
+      tmp <- getSeries(codes_Bbk[i], start = "2019-09", end = "2020-03")
+
+
+      df <- rbind(df, data.frame(gdpQ1 = round(tmp[2, 2] / tmp[1, 2] * 100 - 100, digits = 1), 
+                                 country = countries_Bbk[i]))
+  }
 }
 ```
+
+## DBnomics
+
+```{r}
+
+codes_dbnomics <- c("BE",
+                    "FR",
+                    "IT",
+                    "ES",
+                    "IE",
+                    "AT",
+                    "DK",
+                    "EL",
+                    "FI",
+                    "HU",
+                    "CZ",
+                    "PL",
+                    "PT",
+                    "SE",
+                    "NL",
+                    "CH",
+                    "SI")
+
+countries_dbnomics <- c("Belgium",
+                        "France",
+                        "Italy",
+                        "Spain",
+                        "Ireland",
+                        "Austria",
+                        "Denmark",
+                        "Greece",
+                        "Finland",
+                        "Hungary",
+                        "Czech Republic",
+                        "Poland",
+                        "Portugal",
+                        "Sweden",
+                        "Netherlands",
+                        "Switzerland",
+                        "Slovenia")
+
+for (i in seq(1, length(codes_dbnomics)))
+{
+  
+    rdb(provider_code = paste0("Eurostat/teina011/Q.B1GQ.PCH_Q1_SCA.", codes_dbnomics[i])) %>%
+                        filter(original_period == "2020-Q1") %>% 
+                        select(original_value, `Geopolitical entity (reporting)`) -> tmp2
+
+    df <- rbind(df, data.frame(gdpQ1 = tmp2$original_value, country = tmp2$`Geopolitical entity (reporting)`))
+}
+```
+
+
 
 
