@@ -172,7 +172,7 @@ df_string <- rawdata_string %>%
              select(CountryName, ConfirmedDeaths, StringencyIndex, Date) 
 ```
 
-## Calculate average index value for the 2020Q1
+## Calculate average index value for 2020Q1
 
 ```{r}
 df_string_avgQ1 <- df_string %>% 
@@ -181,12 +181,28 @@ df_string_avgQ1 <- df_string %>%
                    summarise(avgQ1 = mean(StringencyIndex))
 ```
 
+## Calculate average index for 2020Q2
+
+```{r}
+df_string_avgQ2 <- df_string %>% 
+                   filter(Date > "2020-03-31" & Date <= "2020-06-30") %>%
+                   group_by(CountryName) %>%
+                   summarise(avgQ2 = mean(StringencyIndex, na.rm = TRUE))
+```
+
+
+## Merge the two averages and calc diff
+
+```{r}
+merge(df_string_avgQ1, df_string_avgQ2, by = "CountryName") %>% mutate(diffQ2Q1 = avgQ2 - avgQ1) -> df_string_avg
+```
+
 # Analysis
 
 ## Merge two datasets
 
 ```{r}
-df <- merge(df, df_string_avgQ1, by.x = "country", by.y = "CountryName")
+df <- merge(df, df_string_avg, by.x = "country", by.y = "CountryName")
 ```
 
 
@@ -213,13 +229,23 @@ ggplot(data = df, aes(x = avgQ1, y = gdpQ1))+
 ```
 
 
-## Regression
+## Regression & prediction of Q2 GDP
 
 ```{r}
-model <- lm(gdpQ1 ~ avgQ1, df)
-summary(model)
-model_ex_china <- lm(gdpQ1 ~ avgQ1, filter(df, country != "China"))
-summary(model_ex_china)
+df_estim <- select(df, c("country","gdpQ1", "avgQ1")) %>% mutate(index = avgQ1) %>% select(-avgQ1)
+df_fore <- select(df, c("country","gdpQ1", "diffQ2Q1")) %>% mutate(index = diffQ2Q1) %>% select(-diffQ2Q1)
+m <- lm(gdpQ1 ~ index, df_estim)
+summary(m)
+df_fore$gdpQ2 <- predict(m, df_fore)
+df_fore %>% select(country, gdpQ2)
 ```
+  
+Excluding China
+
+```{r}
+#model_ex_china <- lm(gdpQ1 ~ index, filter(df_estim, country != "China"))
+#summary(model_ex_china)
+```
+
 
 
