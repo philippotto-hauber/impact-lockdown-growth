@@ -206,7 +206,7 @@ df <- merge(df, df_string_avg, by.x = "country", by.y = "CountryName")
 
 ## Plot
 
-```{r}
+```{r, fig.height = 5, fig.width = 8}
 
 ggplot(data = df, aes(x = avgQ1, y = gdpQ1))+
   geom_point()+
