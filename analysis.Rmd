@@ -20,64 +20,14 @@ library(ggrepel)
 
 # GDP growth in Q1
 
-## Bundesbank data
-
-```{r}
-codes_Bbk <- c("BBNZ1.Q.DE.Y.H.0000.A",
-               "BBXN1.Q.AU.Y.NAG.B1QG00.0000.Z0N.CPC.I00",
-               "BBXN1.Q.BR.S.NAG.B1QG00.0000.Z0N.IND.I00",
-               "BBXN1.Q.CN.S.NAG.B1QG00.0000.Z0N.PER.I00",
-               "BBXN1.Q.IN00.S.NAG.B1QG00.0000.Z0N.CPF.I00",
-               "BBXN1.Q.JP.S.NAG.B1QG00.0000.Z0N.CPC.I00",
-               "BBXN1.Q.JP.N.NAG.B1QG00.0000.Z0N.CPC.I00",
-               "BBXN1.Q.CA.S.NAG.B1QG00.0000.Z0N.CPC.I00",
-               "BBXN1.Q.KR.Y.NAG.B1QG00.0000.Z0N.CPC.I00",
-               "BBXN1.Q.RU00.S.NAG.B1QG00.0000.Z0N.CPC.I00",
-               "BBXN1.Q.GB.Y.NAG.B1QG00.0000.Z0N.CPC.I00",
-               "BBXN1.Q.US.S.NAG.B1QG00.0000.Z0N.IND.I00")
-
-countries_Bbk <- c("Germany", 
-               "Australia",
-               "Brazil",
-               "China",
-               "India",
-               "Russia",
-               "Japan",
-               "Canada",
-               "South Korea",
-               "Russia",
-               "United Kingdom",
-               "United States")
-               
-df <- data.frame()
-for (i in seq(1, length(codes_Bbk)))
-{
-  if (countries_Bbk[i] == "China") # China already in q/q growth rate!
-  {
-      tmp <- getSeries(codes_Bbk[i], start = "2020-01", end = "2020-03")
-      
-
-
-      df <- rbind(df, data.frame(gdpQ1 = tmp[1, 2], 
-                             country = countries_Bbk[i]))
-    
-  }
-  else 
-  {
-      tmp <- getSeries(codes_Bbk[i], start = "2019-09", end = "2020-03")
-      #tmp$values <- parse_double(tmp$values)
-
-      df <- rbind(df, data.frame(gdpQ1 = round(tmp[2, 2] / tmp[1, 2] * 100 - 100, digits = 1), 
-                                 country = countries_Bbk[i]))
-  }
-}
-```
-
 ## DBnomics
 
+### Eurostat
+
 ```{r}
 
-codes_dbnomics <- c("BE",
+codes_eurostat <- c("DE",
+                    "BE",
                     "FR",
                     "IT",
                     "ES",
@@ -95,7 +45,8 @@ codes_dbnomics <- c("BE",
                     "CH",
                     "SI")
 
-countries_dbnomics <- c("Belgium",
+countries_eurostat <- c("Germany",
+                        "Belgium",
                         "France",
                         "Italy",
                         "Spain",
@@ -113,17 +64,100 @@ countries_dbnomics <- c("Belgium",
                         "Switzerland",
                         "Slovenia")
 
-for (i in seq(1, length(codes_dbnomics)))
+# initialize empty dataframe
+df <- data.frame()
+
+for (i in seq(1, length(codes_eurostat)))
 {
   
-    rdb(provider_code = paste0("Eurostat/teina011/Q.B1GQ.PCH_Q1_SCA.", codes_dbnomics[i])) %>%
+    rdb(provider_code = paste0("Eurostat/teina011/Q.B1GQ.PCH_Q1_SCA.", codes_eurostat[i])) %>%
                         filter(original_period == "2020-Q1") %>%
                         mutate(original_value = parse_double(original_value)) %>%
                         select(original_value, `Geopolitical entity (reporting)`) -> tmp2
 
-    df <- rbind(df, data.frame(gdpQ1 = tmp2$original_value, country = tmp2$`Geopolitical entity (reporting)`))
+    df <- rbind(df, data.frame(gdpQ1 = tmp2$original_value, country = countries_eurostat[i]))
 }
 ```
+
+### OECD
+
+```{r}
+codes_oecd <- c("AUS",
+                "BRA",
+                "CAN",
+                "CHL",
+                "COL",
+                "IND",
+                "IDN",
+                "ISR",
+                "JPN",
+                "KOR",
+                "MEX",
+                "GBR",
+                "USA",
+                "TUR",
+                "CHE")
+
+countries_oecd <- c("Australia",
+                    "Brazil",
+                    "Canada",
+                    "Chile",
+                    "Colombia",
+                    "India",
+                    "Indonesia",
+                    "Israel",
+                    "Japan",
+                    "South Korea",
+                    "Mexico",
+                    "United Kingdom",
+                    "United States",
+                    "Turkey",
+                    "Switzerland")
+
+for (i in seq(1, length(codes_oecd)))
+{
+  
+    rdb(provider_code = paste0("OECD/MEI/", codes_oecd[i], ".NAEXKP01.GPSA.Q")) %>%
+                        filter(original_period == "2020-Q1") %>%
+                        mutate(original_value = parse_double(original_value)) %>%
+                        select(original_value, Country) -> tmp2
+
+    df <- rbind(df, data.frame(gdpQ1 = tmp2$original_value, country = countries_oecd[i]))
+}
+```
+
+## Bundesbank
+
+
+```{r}
+codes_Bbk <- c("BBXN1.Q.CN.S.NAG.B1QG00.0000.Z0N.PER.I00",
+               "BBXN1.Q.RU00.S.NAG.B1QG00.0000.Z0N.CPC.I00")
+
+countries_Bbk <- c("China", "Russia")
+
+for (i in seq(1, length(codes_Bbk)))
+{
+  if (countries_Bbk[i] == "China") # China already in q/q growth rate!
+  {
+      tmp <- getSeries(codes_Bbk[i], start = "2020-01", end = "2020-03")
+
+
+
+      df <- rbind(df, data.frame(gdpQ1 = tmp[1, 2],
+                             country = countries_Bbk[i]))
+
+}
+  else
+  {
+      tmp <- getSeries(codes_Bbk[i], start = "2019-09", end = "2020-03")
+      #tmp$values <- parse_double(tmp$values)
+
+      df <- rbind(df, data.frame(gdpQ1 = round(tmp[2, 2] / tmp[1, 2] * 100 - 100, digits = 1),
+                                 country = countries_Bbk[i]))
+  }
+}
+```
+
 
 # Stringency index
 
@@ -175,7 +209,7 @@ ggplot(data = df, aes(x = avgQ1, y = gdpQ1))+
        y = "percent",
        title = "Lockdown measures and economic activity",
        subtitle = "Average stringency index vs. q/q GDP growth in the first quarter of 2020",
-       caption = "Data for 28 advanced and emerging economies.\n Stringency index:higher values indicate more stringent lockdown measures, GDP: seasonally and calendar adjusted. \n Source: Hale, Thomas, Sam Webster, Anna Petherick, Toby Phillips and Beatriz Kira (2020);\n Eurostat, Deutsche Bundesbank, national statistical authorities.")
+       caption = "Data for 35 advanced and emerging economies.\n Stringency index:higher values indicate more stringent lockdown measures, GDP: seasonally and calendar adjusted. \n Source: Hale, Thomas, Sam Webster, Anna Petherick, Toby Phillips and Beatriz Kira (2020);\n Eurostat, OECD, national statistical authorities.")
 ```
 
 
