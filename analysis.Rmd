@@ -16,6 +16,7 @@ library(lubridate)
 library(ggplot2)
 library(readr) # parse_double
 library(ggrepel)
+library(forcats)
 ```
 
 # GDP growth in Q1
@@ -239,6 +240,15 @@ df_fore$gdpQ2 <- predict(m, df_fore)
 ggplot(df_fore, aes(x =fct_reorder(country, gdpQ2), y =gdpQ2))+
   geom_col(width = 0.7, color = "blue", fill = "blue")+ 
   coord_flip()+ labs(x= "", y = "%", title = "GDP growth forecasts for Q2", subtitle= "based on change in stringency index")+theme_minimal()
+```
+
+## Export data to xlsx
+
+```{r}
+library(xlsx)
+
+df_out <- df %>% select(country, avgQ1, gdpQ1)
+write.xlsx(df_out, "data_plot_avgIndex_gdp.xlsx")
 ```
 
 
