@@ -66,7 +66,7 @@ countries_eurostat <- c("Germany",
 # initialize empty dataframe
 df <- data.frame()
 
-for (i in seq(1, length(codes_eurostat)))
+for (i in seq_along(codes_eurostat))
 {
   
     rdb(provider_code = paste0("Eurostat/teina011/Q.B1GQ.PCH_Q1_SCA.", codes_eurostat[i])) %>%
@@ -113,7 +113,7 @@ countries_oecd <- c("Australia",
                     "Turkey",
                     "Switzerland")
 
-for (i in seq(1, length(codes_oecd)))
+for (i in seq_along(codes_oecd))
 {
   
     rdb(provider_code = paste0("OECD/MEI/", codes_oecd[i], ".NAEXKP01.GPSA.Q")) %>%
@@ -138,7 +138,7 @@ codes_Bbk <- c("BBXN1.Q.CN.S.NAG.B1QG00.0000.Z0N.PER.I00",
 
 countries_Bbk <- c("China", "Russia")
 
-for (i in seq(1, length(codes_Bbk)))
+for (i in seq_along(codes_Bbk))
 {
   if (countries_Bbk[i] == "China") # China already in q/q growth rate!
   {
