@@ -70,11 +70,11 @@ for (i in seq(1, length(codes_eurostat)))
 {
   
     rdb(provider_code = paste0("Eurostat/teina011/Q.B1GQ.PCH_Q1_SCA.", codes_eurostat[i])) %>%
-                        filter(original_period == "2020-Q1") %>%
+                        filter(original_period %in% c("2020-Q1", "2020-Q2")) %>%
                         mutate(original_value = parse_double(original_value)) %>%
                         select(original_value, `Geopolitical entity (reporting)`) -> tmp2
-
-    df <- rbind(df, data.frame(gdpQ1 = tmp2$original_value, country = countries_eurostat[i]))
+    gdpH1 <- 100 * (1+tmp2$original_value[1]/100) * (1+tmp2$original_value[2]/100) - 100
+    df <- rbind(df, data.frame(gdpH1 = gdpH1, country = countries_eurostat[i]))
 }
 ```
 
@@ -117,11 +117,15 @@ for (i in seq(1, length(codes_oecd)))
 {
   
     rdb(provider_code = paste0("OECD/MEI/", codes_oecd[i], ".NAEXKP01.GPSA.Q")) %>%
-                        filter(original_period == "2020-Q1") %>%
-                        mutate(original_value = parse_double(original_value)) %>%
-                        select(original_value, Country) -> tmp2
-
-    df <- rbind(df, data.frame(gdpQ1 = tmp2$original_value, country = countries_oecd[i]))
+      filter(original_period %in% c("2020-Q1", "2020-Q2")) %>%
+      mutate(original_value = parse_double(original_value)) %>%
+      select(original_value, Country) -> tmp2
+  
+    if (countries_oecd[i] == "India")
+      tmp2 <- rbind(tmp2, data.frame(original_value = -25.0, Country = "India"))
+  
+    gdpH1 <- 100 * (1+tmp2$original_value[1]/100) * (1+tmp2$original_value[2]/100) - 100
+    df <- rbind(df, data.frame(gdpH1 = gdpH1, country = countries_oecd[i]))
 }
 ```
 
@@ -138,20 +142,20 @@ for (i in seq(1, length(codes_Bbk)))
 {
   if (countries_Bbk[i] == "China") # China already in q/q growth rate!
   {
-      tmp <- getSeries(codes_Bbk[i], start = "2020-01", end = "2020-03")
+      tmp <- getSeries(codes_Bbk[i], start = "2020-01", end = "2020-06")
 
 
-
-      df <- rbind(df, data.frame(gdpQ1 = tmp[1, 2],
+      gdpH1 <- 100 * (1+tmp[1, 2]/100) * (1+tmp[2, 2]/100) - 100
+      df <- rbind(df, data.frame(gdpH1 = gdpH1,
                              country = countries_Bbk[i]))
 
 }
   else
   {
-      tmp <- getSeries(codes_Bbk[i], start = "2019-09", end = "2020-03")
+      tmp <- getSeries(codes_Bbk[i], start = "2019-09", end = "2020-06")
       #tmp$values <- parse_double(tmp$values)
-
-      df <- rbind(df, data.frame(gdpQ1 = round(tmp[2, 2] / tmp[1, 2] * 100 - 100, digits = 1),
+      gdpH1 <- tmp[3, 2] / tmp[1, 2] * 100 - 100
+      df <- rbind(df, data.frame(gdpH1 = gdpH1,
                                  country = countries_Bbk[i]))
   }
 }
@@ -171,37 +175,22 @@ df_string <- rawdata_string %>%
              select(CountryName, ConfirmedDeaths, StringencyIndex, Date) 
 ```
 
-## Calculate average index value for 2020Q1
+## Calculate average index value for 2020H1
 
 ```{r}
-df_string_avgQ1 <- df_string %>% 
-                   filter(Date <= "2020-03-31") %>%
+df_string_avgH1 <- df_string %>% 
+                   filter(Date <= "2020-06-30") %>%
                    group_by(CountryName) %>%
-                   summarise(avgQ1 = mean(StringencyIndex))
+                   summarise(avgH1 = mean(StringencyIndex))
 ```
 
-## Calculate average index for 2020Q2
-
-```{r}
-df_string_avgQ2 <- df_string %>% 
-                   filter(Date > "2020-03-31" & Date <= "2020-06-30") %>%
-                   group_by(CountryName) %>%
-                   summarise(avgQ2 = mean(StringencyIndex, na.rm = TRUE))
-```
-
-
-## Merge the two averages and calc diff
-
-```{r}
-merge(df_string_avgQ1, df_string_avgQ2, by = "CountryName") %>% mutate(diffQ2Q1 = avgQ2 - avgQ1) -> df_string_avg
-```
 
 # Analysis
 
 ## Merge two datasets
 
 ```{r}
-df <- merge(df, df_string_avg, by.x = "country", by.y = "CountryName")
+df <- merge(df, df_string_avgH1, by.x = "country", by.y = "CountryName")
 ```
 
 
@@ -209,45 +198,45 @@ df <- merge(df, df_string_avg, by.x = "country", by.y = "CountryName")
 
 ```{r, fig.height = 5, fig.width = 8}
 
-ggplot(data = df, aes(x = avgQ1, y = gdpQ1))+
+ggplot(data = df, aes(x = avgH1, y = gdpH1))+
   geom_point()+
   geom_point(data = filter(df, country %in%  c("Italy", "China", "Sweden", "South Korea", "Germany")),
-                   aes(x = avgQ1, y = gdpQ1), color = "red")+
+                   aes(x = avgH1, y = gdpH1), color = "red")+
   geom_label(data = filter(df, country %in%  c("Italy", "China", "Sweden", "South Korea")),
                    aes(label = country),
-                   nudge_x = 1.5, nudge_y = 0.7, size = 3)+
+                   nudge_x = 1.5, nudge_y = 1.7, size = 3)+
     geom_label(data = filter(df, country %in%  c("Germany")),
                    aes(label = country),
-                   nudge_x = 3.0, nudge_y = -0.5, size = 3)+
+                   nudge_x = 2.0, nudge_y = -2.0, size = 3)+
   scale_x_continuous(breaks = seq(0, 60, 10))+
   labs(x = "index",
        y = "percent",
        title = "Lockdown measures and economic activity",
-       subtitle = "Average stringency index vs. q/q GDP growth in the first quarter of 2020",
-       caption = "Data for 35 advanced and emerging economies.\n Stringency index:higher values indicate more stringent lockdown measures, GDP: seasonally and calendar adjusted. \n Source: Hale, Thomas, Sam Webster, Anna Petherick, Toby Phillips and Beatriz Kira (2020);\n Eurostat, OECD, national statistical authorities.")
+       subtitle = "Average stringency index vs. GDP growth in the first half of 2020",
+       caption = paste0("Data for ", nrow(df), " advanced and emerging economies.\nStringency index:higher values indicate more stringent lockdown measures,\nGDP: price and seasonally adjusted, percent change in the level of GDP between 2019Q4 and 2020Q2. \n Source: Hale, Thomas, Sam Webster, Anna Petherick, Toby Phillips and Beatriz Kira (2020); \nEurostat, OECD, national statistical authorities."))
 ```
 
-
-## Regression & prediction of Q2 GDP
-
-```{r, fig.height = 5, fig.width = 5}
-df_estim <- select(df, c("country","gdpQ1", "avgQ1")) %>% mutate(index = avgQ1) %>% select(-avgQ1)
-df_fore <- select(df, c("country","gdpQ1", "diffQ2Q1")) %>% mutate(index = diffQ2Q1) %>% select(-diffQ2Q1)
-m <- lm(gdpQ1 ~ index, df_estim)
-summary(m)
-df_fore$gdpQ2 <- predict(m, df_fore)
-
-ggplot(df_fore, aes(x =fct_reorder(country, gdpQ2), y =gdpQ2))+
-  geom_col(width = 0.7, color = "blue", fill = "blue")+ 
-  coord_flip()+ labs(x= "", y = "%", title = "GDP growth forecasts for Q2", subtitle= "based on change in stringency index")+theme_minimal()
+Save figure to png
+```{r}
+ggsave(
+  filename = "plot_H1.png",
+  plot = last_plot(),
+  device = "png",
+  path = NULL,
+  scale = 1,
+  width = 20,
+  height = 15,
+  units = c("cm")
+)
 ```
+
 
 ## Export data to xlsx
 
 ```{r}
 library(xlsx)
 
-df_out <- df %>% select(country, avgQ1, gdpQ1)
+df_out <- df %>% select(country, avgH1, gdpH1)
 write.xlsx(df_out, "data_plot_avgIndex_gdp.xlsx")
 ```
 
