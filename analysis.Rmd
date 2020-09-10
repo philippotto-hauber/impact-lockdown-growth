@@ -184,17 +184,53 @@ df_string_avgH1 <- df_string %>%
                    summarise(avgH1 = mean(StringencyIndex))
 ```
 
+# October 2019 WEO
+
+```{r}
+GetWEOData <- function(filename, year, var, rename_col)
+{
+  require(dplyr)
+  require(readr)
+  tmp <- read_delim(filename, delim = ";") %>%
+         select(country = Country, iso = ISO, variable = "WEO Subject Code", val = !!year) %>%
+         filter(variable == !!var) %>%
+         select(-variable, everything()) %>%
+         filter(val != "n/a") %>%
+         mutate(val = parse_double(val)) %>%
+         select(country, iso, !!rename_col := val)
+  return(tmp)
+}
+
+filename <- "WEOOct2019all.csv"
+
+weo <- GetWEOData(filename, year = "2020", var = "NGDP_RPCH", rename_col = "gdp_Oct19")
+
+```
+
 
 # Analysis
 
-## Merge two datasets
+## Merge GDP growth in 2020H1 and average stringency index
 
 ```{r}
 df <- merge(df, df_string_avgH1, by.x = "country", by.y = "CountryName")
 ```
 
+Merge with IMF forecast
+
+```{r}
+df <- merge(df, weo, by = "country")
+```
+
+Create new variable: deviation from IMF WEO forecast
+```{r}
+df$dev_gdp <- df$gdpH1 - df$gdp_Oct19
+```
+
 
 ## Plot
+
+### stringency index vs. GDP growth in H1
 
 ```{r, fig.height = 5, fig.width = 8}
 
@@ -230,6 +266,41 @@ ggsave(
 )
 ```
 
+### stringency index vs deviation from IMF October 2019 WEO forecast
+
+```{r}
+ggplot(data = df, aes(x = avgH1, y = dev_gdp))+
+  geom_point()+
+  geom_point(data = filter(df, country %in%  c("Italy", "China", "Sweden", "India", "Germany")),
+                   aes(x = avgH1, y = dev_gdp), color = "red")+
+  geom_label(data = filter(df, country %in%  c("Italy", "China", "Sweden", "India")),
+                   aes(label = country),
+                   nudge_x = 1, nudge_y = 1.5, size = 3)+
+  geom_label(data = filter(df, country %in%  c("Germany")),
+                   aes(label = country),
+                   nudge_x = 2, nudge_y = 3, size = 3)+
+  scale_x_continuous(limits = c(20, 70), breaks = seq(0, 60, 10))+
+  scale_y_continuous(limits = c(-35, 0), breaks = seq(0, -40, -10))+
+  labs(x = "index",
+       y = "percentage points",
+       title = "Lockdown measures and economic activity",
+       subtitle = "Average stringency index vs. drop in GDP compared to IMF forecast",
+       caption = paste0("Data for ", nrow(df), " advanced and emerging economies.\nStringency index:higher values indicate more stringent lockdown measures,\ndrop in GDP is measured as the difference of 2020H1 growth from the IMF October 2019 WEO forecast. \n Source: Hale, Thomas, Sam Webster, Anna Petherick, Toby Phillips and Beatriz Kira (2020); \nEurostat, OECD, national statistical authorities."))
+```
+
+Save figure to png
+```{r}
+ggsave(
+  filename = "plot_H1vsWEO.png",
+  plot = last_plot(),
+  device = "png",
+  path = NULL,
+  scale = 1,
+  width = 20,
+  height = 15,
+  units = c("cm")
+)
+```
 
 ## Export data to xlsx
 
@@ -238,6 +309,9 @@ library(xlsx)
 
 df_out <- df %>% select(country, avgH1, gdpH1)
 write.xlsx(df_out, "data_plot_avgIndex_gdp.xlsx")
+
+df_out <- df %>% select(country, avgH1, gdpH1)
+write.xlsx(df_out, "data_plot_avgIndex_gdp_rel_WEO.xlsx")
 ```
 
 
