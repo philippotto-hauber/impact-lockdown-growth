@@ -207,6 +207,14 @@ weo <- GetWEOData(filename, year = "2020", var = "NGDP_RPCH", rename_col = "gdp_
 
 ```
 
+Rename Korea, drop iso
+
+```{r}
+weo$country[weo$country == "Korea"] <- "South Korea"
+
+weo <- select(weo, -iso)
+```
+
 
 # Analysis
 
@@ -265,6 +273,28 @@ ggsave(
   units = c("cm")
 )
 ```
+
+Regression (excluding China)
+
+```{r}
+reg_exchina <- lm(gdpH1 ~ avgH1, data = df[df$country != "China",])
+summary(reg_exchina)
+```
+
+Plot along with data points
+
+```{r}
+ggplot(data = df, aes(x = avgH1, y = gdpH1))+
+  geom_point()+
+  geom_abline(intercept = coefficients(reg_exchina)[1], slope = coefficients(reg_exchina)[2])+
+  scale_x_continuous(breaks = seq(0, 60, 10))+
+  labs(x = "index",
+       y = "percent",
+       title = "Lockdown measures and economic activity",
+       subtitle = "Average stringency index vs. GDP growth in the first half of 2020",
+       caption = paste0("Data for ", nrow(df), " advanced and emerging economies.\nStringency index:higher values indicate more stringent lockdown measures,\nGDP: price and seasonally adjusted, percent change in the level of GDP between 2019Q4 and 2020Q2. \n Regression line excludes value for China.\n Source: Hale, Thomas, Sam Webster, Anna Petherick, Toby Phillips and Beatriz Kira (2020); \nEurostat, OECD, national statistical authorities."))
+```
+
 
 ### stringency index vs deviation from IMF October 2019 WEO forecast
 
