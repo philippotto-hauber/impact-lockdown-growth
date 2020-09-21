@@ -12,6 +12,7 @@ options(scipen = 999)
 library(bundesbank)
 library(rdbnomics)
 library(dplyr)
+library(tidyr)
 library(lubridate)
 library(ggplot2)
 library(readr) # parse_double
@@ -19,7 +20,7 @@ library(ggrepel)
 library(forcats)
 ```
 
-# GDP growth in Q1
+# GDP growth in H1
 
 ## DBnomics
 
@@ -74,7 +75,7 @@ for (i in seq_along(codes_eurostat))
                         mutate(original_value = parse_double(original_value)) %>%
                         select(original_value, `Geopolitical entity (reporting)`) -> tmp2
     gdpH1 <- 100 * (1+tmp2$original_value[1]/100) * (1+tmp2$original_value[2]/100) - 100
-    df <- rbind(df, data.frame(gdpH1 = gdpH1, country = countries_eurostat[i]))
+    df <- rbind(df, data.frame(country = countries_eurostat[i], gdpH1 = gdpH1))
 }
 ```
 
@@ -120,12 +121,9 @@ for (i in seq_along(codes_oecd))
       filter(original_period %in% c("2020-Q1", "2020-Q2")) %>%
       mutate(original_value = parse_double(original_value)) %>%
       select(original_value, Country) -> tmp2
-  
-    if (countries_oecd[i] == "India")
-      tmp2 <- rbind(tmp2, data.frame(original_value = -25.0, Country = "India"))
-  
+
     gdpH1 <- 100 * (1+tmp2$original_value[1]/100) * (1+tmp2$original_value[2]/100) - 100
-    df <- rbind(df, data.frame(gdpH1 = gdpH1, country = countries_oecd[i]))
+    df <- rbind(df, data.frame(country = countries_oecd[i], gdpH1 = gdpH1))
 }
 ```
 
@@ -146,8 +144,8 @@ for (i in seq_along(codes_Bbk))
 
 
       gdpH1 <- 100 * (1+tmp[1, 2]/100) * (1+tmp[2, 2]/100) - 100
-      df <- rbind(df, data.frame(gdpH1 = gdpH1,
-                             country = countries_Bbk[i]))
+      df <- rbind(df, data.frame(country = countries_Bbk[i],
+                                 gdpH1 = gdpH1))
 
 }
   else
@@ -155,8 +153,8 @@ for (i in seq_along(codes_Bbk))
       tmp <- getSeries(codes_Bbk[i], start = "2019-09", end = "2020-06")
       #tmp$values <- parse_double(tmp$values)
       gdpH1 <- tmp[3, 2] / tmp[1, 2] * 100 - 100
-      df <- rbind(df, data.frame(gdpH1 = gdpH1,
-                                 country = countries_Bbk[i]))
+      df <- rbind(df, data.frame(country = countries_Bbk[i],
+                                 gdpH1 = gdpH1))
   }
 }
 ```
@@ -171,8 +169,10 @@ rawdata_string <- read.csv("https://github.com/OxCGRT/covid-policy-tracker/raw/m
 
 
 df_string <- rawdata_string %>% 
-             mutate(Date = ymd(Date)) %>% 
-             select(CountryName, ConfirmedDeaths, StringencyIndex, Date) 
+             mutate(Date = ymd(Date),
+                    CountryName = CountryName,
+                    StringencyIndex = StringencyIndex) %>% 
+             select(CountryName, StringencyIndex, Date) 
 ```
 
 ## Calculate average index value for 2020H1
@@ -181,8 +181,14 @@ df_string <- rawdata_string %>%
 df_string_avgH1 <- df_string %>% 
                    filter(Date <= "2020-06-30") %>%
                    group_by(CountryName) %>%
-                   summarise(avgH1 = mean(StringencyIndex))
+                   summarise(stringency = mean(StringencyIndex))
 ```
+
+Merge with GDP growth in 2020H1
+```{r}
+df <- merge(df, df_string_avgH1, by.x = "country", by.y = "CountryName")
+```
+
 
 # October 2019 WEO
 
@@ -203,7 +209,7 @@ GetWEOData <- function(filename, year, var, rename_col)
 
 filename <- "WEOOct2019all.csv"
 
-weo <- GetWEOData(filename, year = "2020", var = "NGDP_RPCH", rename_col = "gdp_Oct19")
+weo <- GetWEOData(filename, year = "2020", var = "NGDP_RPCH", rename_col = "gdp_Oct19WEO")
 
 ```
 
@@ -215,16 +221,13 @@ weo$country[weo$country == "Korea"] <- "South Korea"
 weo <- select(weo, -iso)
 ```
 
-
-# Analysis
-
-## Merge GDP growth in 2020H1 and average stringency index
+Recalculate growth rate for 2020 to correspond to 2020H1 (i.e. de-annualize)
 
 ```{r}
-df <- merge(df, df_string_avgH1, by.x = "country", by.y = "CountryName")
+weo$gdp_Oct19WEO  <- (1 + weo$gdp_Oct19WEO / 100) ^ 0.5 * 100 - 100
 ```
 
-Merge with IMF forecast
+Merge with `df`
 
 ```{r}
 df <- merge(df, weo, by = "country")
@@ -232,11 +235,167 @@ df <- merge(df, weo, by = "country")
 
 Create new variable: deviation from IMF WEO forecast
 ```{r}
-df$dev_gdp <- df$gdpH1 - df$gdp_Oct19
+df$dev_gdp <- df$gdpH1 - df$gdp_Oct19WEO
+```
+
+# Openness
+
+Sum of exports and imports in relation to GDP. Source: IMF International Financial Statistics
+
+```{r}
+mnemonics_IFS <- c("DE",
+                    "BE",
+                    "FR",
+                    "IT",
+                    "ES",
+                    "IE",
+                    "AT",
+                    "DK",
+                    "GR",
+                    "FI",
+                    "HU",
+                    "CZ",
+                    "PL",
+                    "PT",
+                    "SE",
+                    "NL",
+                    "SI",
+                    "GB",
+                    "US",
+                    "JP",
+                    "KR", 
+                    "AU",
+                    "CH",
+                    "CA",
+                    "IL",
+                    "CN",
+                    "RU",
+                    "IN",
+                    "ID",
+                    "TR",
+                    "BR",
+                    "CL",
+                    "CO",
+                    "MX")
+
+countries_IFS <- c("Germany",
+                        "Belgium",
+                        "France",
+                        "Italy",
+                        "Spain",
+                        "Ireland",
+                        "Austria",
+                        "Denmark",
+                        "Greece",
+                        "Finland",
+                        "Hungary",
+                        "Czech Republic",
+                        "Poland",
+                        "Portugal",
+                        "Sweden",
+                        "Netherlands",
+                        "Slovenia", 
+                        "United Kingdom",
+                        "United States",
+                        "Japan",
+                        "South Korea",
+                        "Australia", 
+                        "Switzerland",
+                        "Canada",
+                        "Israel",
+                        "China", 
+                        "Russia",
+                        "India",
+                        "Indonesia",
+                        "Turkey",
+                        "Brazil",
+                        "Chile",
+                        "Colombia",
+                        "Mexico")
+
+vars <- c("NGDP", "NX", "NM")
+ifs <- data.frame()
+for (i in seq_along(countries_IFS))
+{
+  codes <- paste0("IMF/IFS/A.", mnemonics_IFS[i], ".", vars, "_XDC")
+  tmp <- rdb(provider_code = codes)
+  if (countries_IFS[i] %in% c("Brazil", "China", "Israel")) # no data for 2019!
+    tmp2 <- filter(tmp, original_period == 2018) %>% mutate(original_value = as.numeric(original_value))
+  else
+    tmp2 <- filter(tmp, original_period == 2019) %>% mutate(original_value = as.numeric(original_value))
+  
+  tmp3 <- (tmp2[tmp2$INDICATOR == "NX_XDC", "original_value"] + 
+             tmp2[tmp2$INDICATOR == "NM_XDC", "original_value"]) / 
+              tmp2[tmp2$INDICATOR == "NGDP_XDC", "original_value"] * 100
+  ifs <- rbind(ifs, data.frame(country = countries_IFS[i], openness = as.numeric(tmp3)))
+}
+```
+
+Merge with `df`
+
+```{r}
+df <- merge(df, ifs, by = "country")
+```
+
+# Tourism 
+
+As a share of total exports. Source: World Bank (WDI?)
+
+```{r}
+wb_raw <- wb(country = "all", indicator = "ST.INT.RCPT.XP.ZS")
+mnemonics_wb <- mnemonics_IFS
+wb_raw %>% filter(date == "2018", iso2c %in% mnemonics_wb) %>% select(country, tourism = value) -> wb
+wb$country[wb$country == "Russian Federation"] <- "Russia"
+wb$country[wb$country == "Korea, Rep."] <- "South Korea"
+```
+
+Merge with `df` 
+```{r}
+df <- merge(df, wb, by = "country")
+```
+
+# Covid-19 deaths
+
+Cumulated deaths by end of 2020Q2. Source: ECDC
+
+```{r}
+ecdc_raw <- read.csv("https://opendata.ecdc.europa.eu/covid19/casedistribution/csv", 
+                    na.strings = "", 
+                    fileEncoding = "UTF-8-BOM", stringsAsFactors = FALSE)
+
+# replace names
+ecdc_raw$countriesAndTerritories[grep(pattern = "Czech+", ecdc_raw$countriesAndTerritories)] <- "Czech Republic"
+ecdc_raw$countriesAndTerritories[ecdc_raw$countriesAndTerritories == "United_States_of_America"] <- "United States"
+ecdc_raw$countriesAndTerritories[ecdc_raw$countriesAndTerritories == "United_Kingdom"] <- "United Kingdom"
+ecdc_raw$countriesAndTerritories[ecdc_raw$countriesAndTerritories == "South_Korea"] <- "South Korea"
+
+# calculate cumulated deaths per million inhabitants
+ecdc_raw %>% mutate(date = make_date(year, month, day),
+                    pop_mio = popData2019 / 1000000) %>% 
+             select(country = countriesAndTerritories, date = date, deaths, pop_mio) %>% 
+             filter(country %in% countries_IFS) %>%
+            arrange(date) %>%
+            group_by(country) %>%
+            mutate(deaths_cumsum = cumsum(deaths) / pop_mio) %>% 
+            filter(date == "2020-06-30") %>% 
+            select(country, covid19deaths = deaths_cumsum) -> ecdc
+```
+
+Merge with `df`
+
+```{r}
+df <- merge(df, ecdc, by= "country")
 ```
 
 
-## Plot
+# Plot
+
+```{r}
+df2 <- df %>% select(-c(gdpH1, gdp_Oct19WEO)) %>% gather(variable, value, -c("dev_gdp", "country"))
+
+ggplot(filter(df2, country != "China"), aes(x = value, y = dev_gdp))+geom_point()+geom_smooth(method = "lm", se = FALSE)+facet_wrap(~variable, scales = "free_x")
+```
+
 
 ### stringency index vs. GDP growth in H1
 
