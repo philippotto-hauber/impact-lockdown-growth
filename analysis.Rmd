@@ -18,6 +18,7 @@ library(ggplot2)
 library(readr) # parse_double
 library(ggrepel)
 library(forcats)
+library(wbstats)
 ```
 
 # GDP growth in H1
@@ -387,6 +388,28 @@ Merge with `df`
 df <- merge(df, ecdc, by= "country")
 ```
 
+
+# Google mobility data
+
+```{r}
+google_raw <- read_csv(file ="https://www.gstatic.com/covid19/mobility/Global_Mobility_Report.csv")
+
+google_raw$country_region[grep(pattern = "Czech+", google_raw$country_region)] <- "Czech Republic"
+
+google_raw %>% filter(is.na(sub_region_1)) %>% 
+               select(date, 
+                      country = country_region,
+                      mobility = retail_and_recreation_percent_change_from_baseline) %>%
+               filter(country %in% countries_IFS, date <= "2020-06-30") %>%
+               group_by(country) %>%
+               summarise(avg_mobility = mean(mobility, na.rm = TRUE)) -> google
+```
+
+Merge with `df`, no observation for China
+
+```{r}
+df <- merge(df, google, by = "country")
+```
 
 # Plot
 
