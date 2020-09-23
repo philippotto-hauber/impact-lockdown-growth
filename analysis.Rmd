@@ -234,9 +234,10 @@ Merge with `df`
 df <- merge(df, weo, by = "country")
 ```
 
-Create new variable: deviation from IMF WEO forecast
+Create new variable: deviation from IMF WEO forecast and remove WEO forecast
 ```{r}
-df$dev_gdp <- df$gdpH1 - df$gdp_Oct19WEO
+df <- df %>% mutate(dev_gdp = gdpH1 - gdp_Oct19WEO) %>% 
+             select(-gdp_Oct19WEO)
 ```
 
 # Openness
@@ -340,14 +341,17 @@ df <- merge(df, ifs, by = "country")
 
 # Tourism 
 
-As a share of total exports. Source: World Bank (WDI?)
+As a share of GDP. Source: World Bank (WDI?)
 
 ```{r}
-wb_raw <- wb(country = "all", indicator = "ST.INT.RCPT.XP.ZS")
+wb_raw <- wb_data(country = "all", indicator = c("ST.INT.RCPT.CD", "NY.GDP.MKTP.CD"), start_date = 2018)
 mnemonics_wb <- mnemonics_IFS
-wb_raw %>% filter(date == "2018", iso2c %in% mnemonics_wb) %>% select(country, tourism = value) -> wb
+wb_raw %>% filter(date == "2018", iso2c %in% mnemonics_wb) %>% select(country, receipts = ST.INT.RCPT.CD, gdpusd = NY.GDP.MKTP.CD) %>%
+mutate(tourism = receipts / gdpusd * 100) %>%
+select(-c(receipts, gdpusd)) -> wb
 wb$country[wb$country == "Russian Federation"] <- "Russia"
 wb$country[wb$country == "Korea, Rep."] <- "South Korea"
+
 ```
 
 Merge with `df` 
@@ -399,131 +403,110 @@ google_raw$country_region[grep(pattern = "Czech+", google_raw$country_region)] <
 google_raw %>% filter(is.na(sub_region_1)) %>% 
                select(date, 
                       country = country_region,
-                      mobility = retail_and_recreation_percent_change_from_baseline) %>%
+                      retail_rec = retail_and_recreation_percent_change_from_baseline,
+                      transit = transit_stations_percent_change_from_baseline,
+                      workplace = workplaces_percent_change_from_baseline) %>%
                filter(country %in% countries_IFS, date <= "2020-06-30") %>%
                group_by(country) %>%
-               summarise(avg_mobility = mean(mobility, na.rm = TRUE)) -> google
+               summarise(retail_rec = mean(retail_rec, na.rm = TRUE),
+                         transit = mean(transit, na.rm = TRUE),
+                         workplace = mean(workplace, na.rm = TRUE)) -> google
 ```
 
-Merge with `df`, no observation for China
+Merge with `df` and gather into `var` and `value`
 
 ```{r}
-df <- merge(df, google, by = "country")
+df <- merge(df, google, by = "country", all.x = TRUE) %>% gather(var, value, -c(country, gdpH1, dev_gdp))
 ```
 
 # Plot
 
+List of emerging market economies
 ```{r}
-df2 <- df %>% select(-c(gdpH1, gdp_Oct19WEO)) %>% gather(variable, value, -c("dev_gdp", "country"))
-
-ggplot(filter(df2, country != "China"), aes(x = value, y = dev_gdp))+geom_point()+geom_smooth(method = "lm", se = FALSE)+facet_wrap(~variable, scales = "free_x")
+list_EME <- c("Brazil", "Mexico", "Turkey", 
+              "China", "India", "Indonesia", 
+              "Chile", "Colombia", "Turkey",
+              "Poland", "Hungary", "Czech Republic")
 ```
 
 
-### stringency index vs. GDP growth in H1
-
-```{r, fig.height = 5, fig.width = 8}
-
-ggplot(data = df, aes(x = avgH1, y = gdpH1))+
-  geom_point()+
-  geom_point(data = filter(df, country %in%  c("Italy", "China", "Sweden", "South Korea", "Germany")),
-                   aes(x = avgH1, y = gdpH1), color = "red")+
-  geom_label(data = filter(df, country %in%  c("Italy", "China", "Sweden", "South Korea")),
-                   aes(label = country),
-                   nudge_x = 1.5, nudge_y = 1.7, size = 3)+
-    geom_label(data = filter(df, country %in%  c("Germany")),
-                   aes(label = country),
-                   nudge_x = 2.0, nudge_y = -2.0, size = 3)+
-  scale_x_continuous(breaks = seq(0, 60, 10))+
-  labs(x = "index",
-       y = "percent",
-       title = "Lockdown measures and economic activity",
-       subtitle = "Average stringency index vs. GDP growth in the first half of 2020",
-       caption = paste0("Data for ", nrow(df), " advanced and emerging economies.\nStringency index:higher values indicate more stringent lockdown measures,\nGDP: price and seasonally adjusted, percent change in the level of GDP between 2019Q4 and 2020Q2. \n Source: Hale, Thomas, Sam Webster, Anna Petherick, Toby Phillips and Beatriz Kira (2020); \nEurostat, OECD, national statistical authorities."))
+## Plot stringency, openness, etc vs. GDP in 2020H1
+```{r}
+df %>% select(-c(dev_gdp)) %>% 
+       filter(var %in% c("stringency", "openness", "tourism", "covid19deaths"),
+              country != "China") %>% 
+       mutate(status = ifelse(country %in% list_EME, "Schwellenländer", "fortgeschrittene Volkswirtschaften"),
+              var = fct_recode(var, "Lockdown-Stringenz" = "stringency", 
+                                              "Offenheit" = "openness", 
+                                              "Tourismus" = "tourism",
+                                              "Covid-19-Todesfälle" = "covid19deaths")
+            ) %>%
+       ggplot(aes(x = value, y = gdpH1))+
+         geom_point()+
+         geom_smooth(method = "lm", se = FALSE, color = "black", size = 0.5)+
+         geom_point(aes(color = status), size = 3)+
+         facet_wrap(~var, scales = "free_x")+
+         labs(y = "BIP, Prozent", x = "",
+              title = "Covid-19-Pandemie: wirtschaftliche Entwicklung in 2020H1",
+              subtitle = "Zusammenhang mit Covid-19-Todesfällen, Grad der Offenheit, Lockdown-Stringenz und Bedeutung des Tourismus ",
+              caption = paste0("Daten für ", length(unique(df$country)) - 1 , " Länder, BIP: Veränderung zwischen 2020Q2 und 2019Q4, Todesfälle: kumuliert, je 1 Mio. Einwohner, Stand 30.6.2020,\nOffenheit: Summe der Exporte und Importe im Verhältnis zur Wirtschaftsleistung,Tourismus: Einnahmen im Verhältnis zur Wirtschaftsleistung,\nLockdown-Stringenz: Index, Durchschnitt in 2020H1, höhere Werte = strengere Maßnahmen, schwarze Linie: linearer Trend.\nQuelle: OECD Main Economic Indicators, Deutsche Bundesbank, ECDC, IMF International Financial Statistics,\nHale et al. (2020), Weltbank World Development Indicators."))+
+        theme_minimal()+
+        theme(legend.title = element_blank(), legend.position = "top", legend.text=element_text(size=9))
 ```
 
-Save figure to png
 ```{r}
 ggsave(
-  filename = "plot_H1.png",
+  filename = "Abb_BIPH1_verschiedeneIndikatoren.pdf",
   plot = last_plot(),
-  device = "png",
+  device = "pdf",
   path = NULL,
   scale = 1,
-  width = 20,
-  height = 15,
-  units = c("cm")
+  width = 25,
+  height = 20,
+  units = c("cm"),
+  dpi = 300,
+  limitsize = TRUE,
 )
 ```
 
-Regression (excluding China)
+
+
+## Google mobility data vs. GDP in 2020H1
 
 ```{r}
-reg_exchina <- lm(gdpH1 ~ avgH1, data = df[df$country != "China",])
-summary(reg_exchina)
+df %>% filter(var %in% c("retail_rec", "transit", "workplace"),
+              country != "China") %>%
+        mutate(status = ifelse(country %in% list_EME, "Schwellenländer", "fortgeschrittene Volkswirtschaften"),
+               var = fct_recode(var, "retail and recreation" = "retail_rec", 
+                                                    "transit stations" = "transit", 
+                                                    "workplace" = "workplace"),
+               value = value + 100
+               ) %>%
+  ggplot(aes(x = value, y = gdpH1, color = var))+
+  geom_point(size = 3)+
+  geom_smooth(method = "lm", se = FALSE)+
+  theme_minimal()+
+  theme(legend.title = element_blank(), legend.position = "top", legend.text=element_text(size=9))+
+  labs(y = "BIP, Prozent", x = "Mobilitätsdaten, Durchschnitt 2020H1",
+       title = "Covid-19-Pandemie: wirtschaftliche Entwicklung in 2020H1",
+       subtitle = "Zusammenhang mit Google-Mobilitätsdaten ",
+              caption = paste0("Daten für ", length(unique(df$country)) - 1 , " Länder, BIP: Veränderung zwischen 2020Q2 und 2019Q4, Mobilitätsdaten: Median zwischen 3. Januar und 6. Februar = 100.\n Linien: linearer Trend. Quelle: OECD Main Economic Indicators, Deutsche Bundesbank, Google Covid-19 Community Mobility Report."))
 ```
 
-Plot along with data points
-
-```{r}
-ggplot(data = df, aes(x = avgH1, y = gdpH1))+
-  geom_point()+
-  geom_abline(intercept = coefficients(reg_exchina)[1], slope = coefficients(reg_exchina)[2])+
-  scale_x_continuous(breaks = seq(0, 60, 10))+
-  labs(x = "index",
-       y = "percent",
-       title = "Lockdown measures and economic activity",
-       subtitle = "Average stringency index vs. GDP growth in the first half of 2020",
-       caption = paste0("Data for ", nrow(df), " advanced and emerging economies.\nStringency index:higher values indicate more stringent lockdown measures,\nGDP: price and seasonally adjusted, percent change in the level of GDP between 2019Q4 and 2020Q2. \n Regression line excludes value for China.\n Source: Hale, Thomas, Sam Webster, Anna Petherick, Toby Phillips and Beatriz Kira (2020); \nEurostat, OECD, national statistical authorities."))
-```
-
-
-### stringency index vs deviation from IMF October 2019 WEO forecast
-
-```{r}
-ggplot(data = df, aes(x = avgH1, y = dev_gdp))+
-  geom_point()+
-  geom_point(data = filter(df, country %in%  c("Italy", "China", "Sweden", "India", "Germany")),
-                   aes(x = avgH1, y = dev_gdp), color = "red")+
-  geom_label(data = filter(df, country %in%  c("Italy", "China", "Sweden", "India")),
-                   aes(label = country),
-                   nudge_x = 1, nudge_y = 1.5, size = 3)+
-  geom_label(data = filter(df, country %in%  c("Germany")),
-                   aes(label = country),
-                   nudge_x = 2, nudge_y = 3, size = 3)+
-  scale_x_continuous(limits = c(20, 70), breaks = seq(0, 60, 10))+
-  scale_y_continuous(limits = c(-35, 0), breaks = seq(0, -40, -10))+
-  labs(x = "index",
-       y = "percentage points",
-       title = "Lockdown measures and economic activity",
-       subtitle = "Average stringency index vs. drop in GDP compared to IMF forecast",
-       caption = paste0("Data for ", nrow(df), " advanced and emerging economies.\nStringency index:higher values indicate more stringent lockdown measures,\ndrop in GDP is measured as the difference of 2020H1 growth from the IMF October 2019 WEO forecast. \n Source: Hale, Thomas, Sam Webster, Anna Petherick, Toby Phillips and Beatriz Kira (2020); \nEurostat, OECD, national statistical authorities."))
-```
-
-Save figure to png
 ```{r}
 ggsave(
-  filename = "plot_H1vsWEO.png",
+  filename = "Abb_BIPH1_Google.pdf",
   plot = last_plot(),
-  device = "png",
+  device = "pdf",
   path = NULL,
   scale = 1,
-  width = 20,
-  height = 15,
-  units = c("cm")
+  width = 25,
+  height = 20,
+  units = c("cm"),
+  dpi = 300,
+  limitsize = TRUE,
 )
 ```
 
-## Export data to xlsx
-
-```{r}
-library(xlsx)
-
-df_out <- df %>% select(country, avgH1, gdpH1)
-write.xlsx(df_out, "data_plot_avgIndex_gdp.xlsx")
-
-df_out <- df %>% select(country, avgH1, gdpH1)
-write.xlsx(df_out, "data_plot_avgIndex_gdp_rel_WEO.xlsx")
-```
 
 
