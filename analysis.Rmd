@@ -346,7 +346,7 @@ As a share of GDP. Source: World Bank (WDI?)
 ```{r}
 wb_raw <- wb_data(country = "all", indicator = c("ST.INT.RCPT.CD", "NY.GDP.MKTP.CD"), start_date = 2018)
 mnemonics_wb <- mnemonics_IFS
-wb_raw %>% filter(date == "2018", iso2c %in% mnemonics_wb) %>% select(country, receipts = ST.INT.RCPT.CD, gdpusd = NY.GDP.MKTP.CD) %>%
+wb_raw %>% filter(date == "2018", iso2c %in% mnemonics_wb) %>% select(country, receipts = ST.INT.RCPT.CD, gdpusd = NY.GDP.MKTP.CD, iso3c) %>%
 mutate(tourism = receipts / gdpusd * 100) %>%
 select(-c(receipts, gdpusd)) -> wb
 wb$country[wb$country == "Russian Federation"] <- "Russia"
@@ -434,7 +434,21 @@ google_raw %>% filter(is.na(sub_region_1)) %>%
 Merge with `df` and gather into `var` and `value`
 
 ```{r}
-df <- merge(df, google, by = "country", all.x = TRUE) %>% gather(var, value, -c(country, gdpH1, dev_gdp))
+df <- merge(df, google, by = "country", all.x = TRUE)
+```
+
+# Economic structure
+
+GVA by sectors, source: OECD
+
+```{r}
+oecd_sect_raw <- read.xlsx(file = "IWH1.xlsx", sheetName = "OECD Data")
+
+oecd_sect_raw %>% select(codes, G.I, R.U) -> oecd_sect
+```
+
+```{r}
+merge(df, oecd_sect, by.x = "iso3c", by.y = "codes") %>% select(-iso3c) %>% gather(var, value, -c(country, gdpH1, dev_gdp)) -> df
 ```
 
 # Plot
@@ -464,7 +478,7 @@ df %>% select(-c(dev_gdp)) %>%
        ggplot(aes(x = value, y = gdpH1))+
          geom_point()+
          geom_smooth(method = "lm", se = FALSE, color = "black", size = 0.5)+
-         geom_point(aes(color = status), size = 3)+
+          geom_point(aes(color = status), size = 3)+
          facet_wrap(~var, scales = "free_x")+
          labs(y = "BIP, Prozent", x = "",
               title = "Covid-19-Pandemie: wirtschaftliche Entwicklung in 2020H1",
@@ -528,5 +542,45 @@ ggsave(
 )
 ```
 
+## OECD data on economic structure vs. growth in 2020H1
 
+```{r}
+df %>% filter(var %in% c("G.I", "R.U"),
+              country != "China") %>%
+        mutate(status = ifelse(country %in% list_EME, "Schwellenländer", "fortgeschrittene Volkswirtschaften"),
+               var = fct_recode(var, "trade, transport, accommodation" = "G.I", 
+                                     "arts, entertainment, recreation" = "R.U"
+                                )
+               ) -> df_plot
 
+  ggplot(df_plot,aes(x = value, y = gdpH1))+
+  geom_point()+
+  facet_wrap(~var, nrow = 1, scales = "free_x")+
+  geom_smooth(method = "lm", se = FALSE, color = "black", size = 0.5)+
+  stat_regline_equation(formula = y ~ x, aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")),
+                        label.x.npc = "left",
+                        label.y.npc = "top",)+
+  geom_point(aes(color = status), size = 3)+
+  ylim(c(-25, 0))+
+  facet_wrap(~var, scales = "free_x")+
+  labs(y = "BIP, Prozent", x = "",
+      title = "Covid-19-Pandemie: wirtschaftliche Entwicklung in 2020H1",
+      subtitle = "Zusammenhang mit Wirtschaftsstruktur ",
+      caption = paste0("Daten für ", length(unique(df_plot$country)) - 1 , " Länder, BIP: Veränderung zwischen 2020Q2 und 2019Q4, Anteil an der Bruttowertschöpfung.Quelle: OECD National Accounts."))+
+        theme_minimal()+
+        theme(legend.title = element_blank(), legend.position = "top", legend.text=element_text(size=9))
+```
+```{r}
+ggsave(
+  filename = "Abb_BIPH1_Bereiche.pdf",
+  plot = last_plot(),
+  device = "pdf",
+  path = NULL,
+  scale = 1,
+  width = 25,
+  height = 20,
+  units = c("cm"),
+  dpi = 300,
+  limitsize = TRUE,
+)
+```
