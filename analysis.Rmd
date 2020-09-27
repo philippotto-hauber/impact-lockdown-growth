@@ -19,6 +19,7 @@ library(readr) # parse_double
 library(ggrepel)
 library(forcats)
 library(wbstats)
+library(openxlsx)
 ```
 
 # GDP growth in H1
@@ -442,9 +443,9 @@ df <- merge(df, google, by = "country", all.x = TRUE)
 GVA by sectors, source: OECD
 
 ```{r}
-oecd_sect_raw <- read.xlsx(file = "IWH1.xlsx", sheetName = "OECD Data")
+oecd_sect_raw <- read.xlsx(xlsxFile = "./IWH1.xlsx", sheet = "OECD Data")
 
-oecd_sect_raw %>% select(codes, G.I, R.U) -> oecd_sect
+oecd_sect_raw %>% select(codes, G.I = `G-I`, R.U = `R-U`) -> oecd_sect
 ```
 
 ```{r}
@@ -461,6 +462,12 @@ list_EME <- c("Brazil", "Mexico", "Turkey",
               "Poland", "Hungary", "Czech Republic")
 ```
 
+Calculate R^2 using function `calcR2.R`
+
+```{r}
+source("calcR2.R")
+df_R2 <- calcR2(filter(df, country != "China"))
+```
 
 ## Plot stringency, openness, etc vs. GDP in 2020H1
 ```{r}
@@ -477,12 +484,14 @@ df %>% select(-c(dev_gdp)) %>%
             ) %>%
        ggplot(aes(x = value, y = gdpH1))+
          geom_point()+
+         geom_text(data = filter(df_R2, var %in% c("Lockdown-Stringenz", "Offenheit", "Tourismus (WTTC)", "Tourismus (Weltbank)", "Covid-19-Infektionen", "Covid-19-Todesfälle")),
+                  mapping = aes(x = x, y = y, label = R2), size = 3)+
          geom_smooth(method = "lm", se = FALSE, color = "black", size = 0.5)+
           geom_point(aes(color = status), size = 3)+
          facet_wrap(~var, scales = "free_x")+
          labs(y = "BIP, Prozent", x = "",
               title = "Covid-19-Pandemie: wirtschaftliche Entwicklung in 2020H1",
-              subtitle = "Zusammenhang mit Covid-19-Todesfällen, Grad der Offenheit, Lockdown-Stringenz und Bedeutung des Tourismus ",
+              subtitle = "Zusammenhang mit Covid-19, Grad der Offenheit, Lockdown-Stringenz und Bedeutung des Tourismus ",
               caption = paste0("Daten für ", length(unique(df$country)) - 1 , " Länder, BIP: Veränderung zwischen 2020Q2 und 2019Q4, Infektions- und Todesfälle: kumuliert, je 1 Mio. Einwohner, Stand 30.6.2020,\nOffenheit: Summe der Exporte und Importe im Verhältnis zur Wirtschaftsleistung,Tourismus (Weltbank): Einnahmen im Verhältnis zur Wirtschaftsleistung,\nTourismus (WTTC): Gesamtbeitrag zur Bruttowertschöpfung (Prozent),Lockdown-Stringenz: Index, Durchschnitt in 2020H1, höhere Werte = strengere Maßnahmen, \nschwarze Linie: linearer Trend.Quelle: OECD Main Economic Indicators, Deutsche Bundesbank, ECDC, IMF International Financial Statistics,\nHale et al. (2020), World Travel and Trade Council, Weltbank World Development Indicators."))+
         theme_minimal()+
         theme(legend.title = element_blank(), legend.position = "top", legend.text=element_text(size=9))
@@ -518,6 +527,8 @@ df %>% filter(var %in% c("retail_rec", "transit", "workplace"),
                ) %>%
   ggplot(aes(x = value, y = gdpH1, color = var))+
   geom_point(size = 3)+
+  geom_text(data = filter(df_R2, var %in% c("retail and recreation", "transit stations", "workplace")), 
+            aes(x = x, y = y, label = R2), size = 4)+
   geom_smooth(method = "lm", se = FALSE)+
   theme_minimal()+
   theme(legend.title = element_blank(), legend.position = "top", legend.text=element_text(size=9))+
@@ -544,6 +555,7 @@ ggsave(
 
 ## OECD data on economic structure vs. growth in 2020H1
 
+
 ```{r}
 df %>% filter(var %in% c("G.I", "R.U"),
               country != "China") %>%
@@ -557,9 +569,8 @@ df %>% filter(var %in% c("G.I", "R.U"),
   geom_point()+
   facet_wrap(~var, nrow = 1, scales = "free_x")+
   geom_smooth(method = "lm", se = FALSE, color = "black", size = 0.5)+
-  stat_regline_equation(formula = y ~ x, aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~")),
-                        label.x.npc = "left",
-                        label.y.npc = "top",)+
+  geom_text(data = filter(df_R2, var %in% c("trade, transport, accommodation", "arts, entertainment, recreation")),
+                   mapping = aes(x = x, y = y, label = R2))+
   geom_point(aes(color = status), size = 3)+
   ylim(c(-25, 0))+
   facet_wrap(~var, scales = "free_x")+
