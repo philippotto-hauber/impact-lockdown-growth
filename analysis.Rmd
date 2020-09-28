@@ -478,5 +478,22 @@ ggsave(
 ```
 
 
+# Calculate R², correlation coefficient and p value of regression coefficient
+```{r}
+
+df_reg <- data.frame()
+
+for (var in unique(df$var))
+{
+  ind_var <- df$var == var & df$country != "China"
+  modl <- lm(df$gdpH1[ind_var] ~ df$value[ind_var])
+  sum_modl <- summary(modl)
+  r2 <- format(round(sum_modl$r.squared,2), nsmall = 2)
+  rho <- format(round(cor(df$gdpH1[ind_var], df$value[ind_var], use = "pairwise.complete.obs"), 2), nsmall = 2)
+  pval <- format(round(sum_modl$coefficients[2,4], 2), nsmall = 2)
+  df_reg <- rbind(df_reg, data.frame(var = var, r2 = r2, rho = rho, pval = pval))
+}
+```
+
 
 
