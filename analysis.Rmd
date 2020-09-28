@@ -26,10 +26,10 @@ library(openxlsx)
 
 ## DBnomics
 
-### Eurostat
+### Eurostat & OECD
 
+Construct codes for DBnomics
 ```{r}
-
 codes_eurostat <- c("DE",
                     "BE",
                     "FR",
@@ -47,43 +47,6 @@ codes_eurostat <- c("DE",
                     "SE",
                     "NL",
                     "SI")
-
-countries_eurostat <- c("Germany",
-                        "Belgium",
-                        "France",
-                        "Italy",
-                        "Spain",
-                        "Ireland",
-                        "Austria",
-                        "Denmark",
-                        "Greece",
-                        "Finland",
-                        "Hungary",
-                        "Czech Republic",
-                        "Poland",
-                        "Portugal",
-                        "Sweden",
-                        "Netherlands",
-                        "Slovenia")
-
-# initialize empty dataframe
-df <- data.frame()
-
-for (i in seq_along(codes_eurostat))
-{
-  
-    rdb(provider_code = paste0("Eurostat/teina011/Q.B1GQ.PCH_Q1_SCA.", codes_eurostat[i])) %>%
-                        filter(original_period %in% c("2020-Q1", "2020-Q2")) %>%
-                        mutate(original_value = parse_double(original_value)) %>%
-                        select(original_value, `Geopolitical entity (reporting)`) -> tmp2
-    gdpH1 <- 100 * (1+tmp2$original_value[1]/100) * (1+tmp2$original_value[2]/100) - 100
-    df <- rbind(df, data.frame(country = countries_eurostat[i], gdpH1 = gdpH1))
-}
-```
-
-### OECD
-
-```{r}
 codes_oecd <- c("AUS",
                 "BRA",
                 "CAN",
@@ -100,33 +63,22 @@ codes_oecd <- c("AUS",
                 "TUR",
                 "CHE")
 
-countries_oecd <- c("Australia",
-                    "Brazil",
-                    "Canada",
-                    "Chile",
-                    "Colombia",
-                    "India",
-                    "Indonesia",
-                    "Israel",
-                    "Japan",
-                    "South Korea",
-                    "Mexico",
-                    "United Kingdom",
-                    "United States",
-                    "Turkey",
-                    "Switzerland")
+codes_dbnomics <- c(paste0("Eurostat/teina011/Q.B1GQ.PCH_Q1_SCA.", codes_eurostat),
+                    paste0("OECD/MEI/", codes_oecd, ".NAEXKP01.GPSA.Q"))
+```
 
-for (i in seq_along(codes_oecd))
-{
-  
-    rdb(provider_code = paste0("OECD/MEI/", codes_oecd[i], ".NAEXKP01.GPSA.Q")) %>%
-      filter(original_period %in% c("2020-Q1", "2020-Q2")) %>%
-      mutate(original_value = parse_double(original_value)) %>%
-      select(original_value, Country) -> tmp2
+Call `rdb`
+```{r}
+df <- rdb(provider_code = codes_dbnomics) %>%
+        filter(original_period %in% c("2020-Q1", "2020-Q2")) %>%
+        mutate(original_value = parse_double(original_value),
+               country = ifelse(is.na(Country), `Geopolitical entity (reporting)`, Country)) %>%
+        select(original_value, original_period, country) %>%
+        group_by(country) %>%
+        summarize(gdpH1 = 100 * (1+original_value[original_period == "2020-Q1"]/100) * 
+                                (1+original_value[original_period == "2020-Q2"]/100) - 100)
 
-    gdpH1 <- 100 * (1+tmp2$original_value[1]/100) * (1+tmp2$original_value[2]/100) - 100
-    df <- rbind(df, data.frame(country = countries_oecd[i], gdpH1 = gdpH1))
-}
+df$country[grepl(pattern = "Germany", df$country)] <- "Germany"
 ```
 
 ## Bundesbank
@@ -160,6 +112,7 @@ for (i in seq_along(codes_Bbk))
   }
 }
 ```
+
 
 
 # Stringency index
@@ -245,6 +198,11 @@ df <- df %>% mutate(dev_gdp = gdpH1 - gdp_Oct19WEO) %>%
 
 Sum of exports and imports in relation to GDP. Source: IMF International Financial Statistics
 
+
+```{r}
+start.time <- Sys.time()
+```
+
 ```{r}
 mnemonics_IFS <- c("DE",
                     "BE",
@@ -281,57 +239,19 @@ mnemonics_IFS <- c("DE",
                     "CO",
                     "MX")
 
-countries_IFS <- c("Germany",
-                        "Belgium",
-                        "France",
-                        "Italy",
-                        "Spain",
-                        "Ireland",
-                        "Austria",
-                        "Denmark",
-                        "Greece",
-                        "Finland",
-                        "Hungary",
-                        "Czech Republic",
-                        "Poland",
-                        "Portugal",
-                        "Sweden",
-                        "Netherlands",
-                        "Slovenia", 
-                        "United Kingdom",
-                        "United States",
-                        "Japan",
-                        "South Korea",
-                        "Australia", 
-                        "Switzerland",
-                        "Canada",
-                        "Israel",
-                        "China", 
-                        "Russia",
-                        "India",
-                        "Indonesia",
-                        "Turkey",
-                        "Brazil",
-                        "Chile",
-                        "Colombia",
-                        "Mexico")
-
 vars <- c("NGDP", "NX", "NM")
-ifs <- data.frame()
-for (i in seq_along(countries_IFS))
-{
-  codes <- paste0("IMF/IFS/A.", mnemonics_IFS[i], ".", vars, "_XDC")
-  tmp <- rdb(provider_code = codes)
-  if (countries_IFS[i] %in% c("Brazil", "China", "Israel")) # no data for 2019!
-    tmp2 <- filter(tmp, original_period == 2018) %>% mutate(original_value = as.numeric(original_value))
-  else
-    tmp2 <- filter(tmp, original_period == 2019) %>% mutate(original_value = as.numeric(original_value))
-  
-  tmp3 <- (tmp2[tmp2$INDICATOR == "NX_XDC", "original_value"] + 
-             tmp2[tmp2$INDICATOR == "NM_XDC", "original_value"]) / 
-              tmp2[tmp2$INDICATOR == "NGDP_XDC", "original_value"] * 100
-  ifs <- rbind(ifs, data.frame(country = countries_IFS[i], openness = as.numeric(tmp3)))
-}
+tmp1 <- rep(paste0("IMF/IFS/A.", mnemonics_IFS), each = length(vars))
+tmp2 <- rep(paste0(vars, "_XDC"), times = length(tmp1) / length(vars))
+codes <- paste0(tmp1, ".", tmp2)
+  ifs <- rdb(provider_code = codes) %>%
+         select(original_period, original_value, country = `Reference Area`, INDICATOR) %>%
+         filter(original_period == 2018) %>% 
+         mutate(original_value = as.numeric(original_value)) %>%
+         group_by(country) %>%
+         summarise(openness = (original_value[INDICATOR =="NX_XDC"] + 
+                               original_value[INDICATOR =="NM_XDC"]) / 
+                               original_value[INDICATOR == "NGDP_XDC"] * 100
+                   )
 ```
 
 Merge with `df`
