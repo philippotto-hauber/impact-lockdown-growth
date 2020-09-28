@@ -120,7 +120,7 @@ for (i in seq_along(codes_Bbk))
 ## Load raw data and select the relevant indicators
 
 ```{r}
-rawdata_string <- read.csv("https://github.com/OxCGRT/covid-policy-tracker/raw/master/data/OxCGRT_latest.csv")
+rawdata_string <- read_csv("https://github.com/OxCGRT/covid-policy-tracker/raw/master/data/OxCGRT_latest.csv")
 
 
 df_string <- rawdata_string %>% 
@@ -288,7 +288,7 @@ wttc_raw <- read.csv(file = "WTTC.csv", sep = ";", stringsAsFactors = FALSE)
 
 wttc_raw$Country[wttc_raw$Country == "Russian Federation"] <- "Russia"
 
-wttc_raw %>% filter(Country %in% countries_IFS) %>% select(country = Country, traveltourism = X2018) -> wttc
+wttc_raw %>% filter(Country %in% df$country) %>% select(country = Country, traveltourism = X2018) -> wttc
 ```
 
 Merge with `df` 
@@ -302,9 +302,8 @@ df <- merge(df, wttc, by = "country")
 Cumulated deaths by end of 2020Q2. Source: ECDC
 
 ```{r}
-ecdc_raw <- read.csv("https://opendata.ecdc.europa.eu/covid19/casedistribution/csv", 
-                    na.strings = "", 
-                    fileEncoding = "UTF-8-BOM", stringsAsFactors = FALSE)
+ecdc_raw <- read_csv("https://opendata.ecdc.europa.eu/covid19/casedistribution/csv", 
+                    na = "")
 
 # replace names
 ecdc_raw$countriesAndTerritories[grep(pattern = "Czech+", ecdc_raw$countriesAndTerritories)] <- "Czech Republic"
@@ -315,8 +314,8 @@ ecdc_raw$countriesAndTerritories[ecdc_raw$countriesAndTerritories == "South_Kore
 # calculate cumulated deaths per million inhabitants
 ecdc_raw %>% mutate(date = make_date(year, month, day),
                     pop_mio = popData2019 / 1000000) %>% 
-             select(country = countriesAndTerritories, date = date, cases, deaths, pop_mio) %>% 
-             filter(country %in% countries_IFS) %>%
+             select(country = countriesAndTerritories, geoId, date = date, cases, deaths, pop_mio) %>% 
+             filter(geoId %in% mnemonics_IFS) %>%
             arrange(date) %>%
             group_by(country) %>%
             mutate(cases_cumsum = cumsum(cases) / pop_mio,
@@ -345,7 +344,7 @@ google_raw %>% filter(is.na(sub_region_1)) %>%
                       retail_rec = retail_and_recreation_percent_change_from_baseline,
                       transit = transit_stations_percent_change_from_baseline,
                       workplace = workplaces_percent_change_from_baseline) %>%
-               filter(country %in% countries_IFS, date <= "2020-06-30") %>%
+               filter(country %in% df$country, date <= "2020-06-30") %>%
                group_by(country) %>%
                summarise(retail_rec = mean(retail_rec, na.rm = TRUE),
                          transit = mean(transit, na.rm = TRUE),
