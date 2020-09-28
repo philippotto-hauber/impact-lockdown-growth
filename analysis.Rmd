@@ -79,6 +79,8 @@ df <- rdb(provider_code = codes_dbnomics) %>%
                                 (1+original_value[original_period == "2020-Q2"]/100) - 100)
 
 df$country[grepl(pattern = "Germany", df$country)] <- "Germany"
+df$country[grepl(pattern = "Czechia", df$country)] <- "Czech Republic"
+df$country[grepl(pattern = "Korea", df$country)] <- "South Korea"
 ```
 
 ## Bundesbank
@@ -252,6 +254,15 @@ codes <- paste0(tmp1, ".", tmp2)
                                original_value[INDICATOR =="NM_XDC"]) / 
                                original_value[INDICATOR == "NGDP_XDC"] * 100
                    )
+  
+
+```
+
+Adjust names for South Korea and Russia
+
+```{r}
+ifs$country[grepl(pattern = "Russian Federation", ifs$country)] <- "Russia"
+ifs$country[grepl(pattern = "Korea*", ifs$country)] <- "South Korea"
 ```
 
 Merge with `df`
@@ -311,11 +322,15 @@ ecdc_raw$countriesAndTerritories[ecdc_raw$countriesAndTerritories == "United_Sta
 ecdc_raw$countriesAndTerritories[ecdc_raw$countriesAndTerritories == "United_Kingdom"] <- "United Kingdom"
 ecdc_raw$countriesAndTerritories[ecdc_raw$countriesAndTerritories == "South_Korea"] <- "South Korea"
 
+mnemonics_ecdc <- mnemonics_IFS
+mnemonics_ecdc[mnemonics_ecdc == "GB"] <- "UK"
+mnemonics_ecdc[mnemonics_ecdc == "GR"] <- "EL"
+
 # calculate cumulated deaths per million inhabitants
 ecdc_raw %>% mutate(date = make_date(year, month, day),
                     pop_mio = popData2019 / 1000000) %>% 
              select(country = countriesAndTerritories, geoId, date = date, cases, deaths, pop_mio) %>% 
-             filter(geoId %in% mnemonics_IFS) %>%
+             filter(geoId %in% mnemonics_ecdc) %>%
             arrange(date) %>%
             group_by(country) %>%
             mutate(cases_cumsum = cumsum(cases) / pop_mio,
@@ -355,7 +370,7 @@ google_raw %>% filter(is.na(sub_region_1)) %>%
                       mobility = (retail_rec + transit + workplace) / 3) -> google
 ```
 
-Merge with `df` and gather into `var` and `value`
+Merge with `df` 
 
 ```{r}
 df <- merge(df, google, by = "country", all.x = TRUE)
@@ -372,8 +387,14 @@ oecd_sect_raw %>% select(codes, G.I = `G-I`, R.U = `R-U`) %>% mutate(structure =
 ```
 
 ```{r}
-merge(df, oecd_sect, by.x = "iso3c", by.y = "codes") %>% select(-iso3c) %>% gather(var, value, -c(country, gdpH1, dev_gdp)) -> df
+merge(df, oecd_sect, by.x = "iso3c", by.y = "codes") %>% select(-iso3c) -> df
 ```
+
+Gather into `var` and `value`
+```{r}
+df <- gather(df, var, value, -c(country, gdpH1, dev_gdp))
+```
+
 
 # Plot
 
