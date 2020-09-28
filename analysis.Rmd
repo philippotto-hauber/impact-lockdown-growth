@@ -429,7 +429,11 @@ google_raw %>% filter(is.na(sub_region_1)) %>%
                group_by(country) %>%
                summarise(retail_rec = mean(retail_rec, na.rm = TRUE),
                          transit = mean(transit, na.rm = TRUE),
-                         workplace = mean(workplace, na.rm = TRUE)) -> google
+                         workplace = mean(workplace, na.rm = TRUE)) %>%
+               mutate(retail_rec = retail_rec + 100,
+                      transit = transit + 100,
+                      workplace = workplace + 100,
+                      mobility = (retail_rec + transit + workplace) / 3) -> google
 ```
 
 Merge with `df` and gather into `var` and `value`
@@ -445,7 +449,7 @@ GVA by sectors, source: OECD
 ```{r}
 oecd_sect_raw <- read.xlsx(xlsxFile = "./IWH1.xlsx", sheet = "OECD Data")
 
-oecd_sect_raw %>% select(codes, G.I = `G-I`, R.U = `R-U`) -> oecd_sect
+oecd_sect_raw %>% select(codes, G.I = `G-I`, R.U = `R-U`) %>% mutate(structure = G.I + R.U) -> oecd_sect
 ```
 
 ```{r}
@@ -469,10 +473,13 @@ source("calcR2.R")
 df_R2 <- calcR2(filter(df, country != "China"))
 ```
 
-## Plot stringency, openness, etc vs. GDP in 2020H1
+## Plot GDP in 2020H1 vs various indicators
+
+`df_plot`
+
 ```{r}
 df %>% select(-c(dev_gdp)) %>% 
-       filter(var %in% c("stringency", "openness", "traveltourism","tourism", "covid19cases", "covid19deaths"),
+       filter(var %in% c("stringency", "openness", "traveltourism","tourism", "covid19cases", "covid19deaths", "structure", "retail_rec"),
               country != "China") %>% 
        mutate(status = ifelse(country %in% list_EME, "Schwellenländer", "fortgeschrittene Volkswirtschaften"),
               var = fct_recode(var, "Lockdown-Stringenz" = "stringency", 
@@ -480,26 +487,44 @@ df %>% select(-c(dev_gdp)) %>%
                                               "Tourismus (WTTC)" = "traveltourism",
                                               "Tourismus (Weltbank)" = "tourism",
                                               "Covid-19-Infektionen" = "covid19cases",
-                                              "Covid-19-Todesfälle" = "covid19deaths")
-            ) %>%
-       ggplot(aes(x = value, y = gdpH1))+
+                                              "Covid-19-Todesfälle" = "covid19deaths",
+                                              "Mobilitätsdaten" = "retail_rec",
+                                              "Dienstleistungsbereiche" = "structure")
+            ) -> df_plot
+```
+
+
+caption text
+
+```{r}
+txt_caption <- paste0("Daten für ", length(unique(df_plot$country)), " Länder, BIP: Veränderung zwischen 2020Q2 und 2019Q4, Infektions- und Todesfälle: kumuliert, je 1 Mio. Einwohner, Stand 30.6.2020,Offenheit: Summe der Exporte und Importe im Verhältnis zur Wirtschaftsleistung,\n Tourismus (Weltbank): Einnahmen im Verhältnis zur Wirtschaftsleistung,Tourismus (WTTC): Gesamtbeitrag zur Bruttowertschöpfung (Prozent),Lockdown-Stringenz: Index, Durchschnitt in 2020H1, höhere Werte = strengere Maßnahmen,\n Dienstleistungsbereiche: Wertschöpfungsanteile der Bereiche Transport, Handel, Gast- und Freizeitgewerbe, Mobiltitätsdaten: Durchschnitt der Bereiche \"retail and recreation\", \"transit stations\" und \"workplace\", schwarze Linie: linearer Trend. \nQuelle: OECD Main Economic Indicators, Deutsche Bundesbank, ECDC, IMF International Financial Statistics, Hale et al. (2020), World Travel and Trade Council, Weltbank World Development Indicators, Google Community Mobility Reports.")
+```
+
+```{r}
+df_plot$status[df_plot$country == "Germany"] <- "Deutschland"
+       ggplot(df_plot, aes(x = value, y = gdpH1))+
          geom_point()+
-         geom_text(data = filter(df_R2, var %in% c("Lockdown-Stringenz", "Offenheit", "Tourismus (WTTC)", "Tourismus (Weltbank)", "Covid-19-Infektionen", "Covid-19-Todesfälle")),
+         geom_text(data = filter(df_R2, var %in% c("Lockdown-Stringenz", "Offenheit", "Tourismus (WTTC)", "Tourismus (Weltbank)", "Covid-19-Infektionen", "Covid-19-Todesfälle", "Dienstleistungsbereiche", "Mobilitätsdaten")),
                   mapping = aes(x = x, y = y, label = R2), size = 3)+
          geom_smooth(method = "lm", se = FALSE, color = "black", size = 0.5)+
-          geom_point(aes(color = status), size = 3)+
-         facet_wrap(~var, scales = "free_x")+
+          geom_point(aes(color = status), size = 2)+
+         scale_color_manual(values=c("#000000", "#00BFC4", "#FA8072"))+
+         facet_wrap(~var, scales = "free_x", nrow = 2)+
          labs(y = "BIP, Prozent", x = "",
               title = "Covid-19-Pandemie: wirtschaftliche Entwicklung in 2020H1",
-              subtitle = "Zusammenhang mit Covid-19, Grad der Offenheit, Lockdown-Stringenz und Bedeutung des Tourismus ",
-              caption = paste0("Daten für ", length(unique(df$country)) - 1 , " Länder, BIP: Veränderung zwischen 2020Q2 und 2019Q4, Infektions- und Todesfälle: kumuliert, je 1 Mio. Einwohner, Stand 30.6.2020,\nOffenheit: Summe der Exporte und Importe im Verhältnis zur Wirtschaftsleistung,Tourismus (Weltbank): Einnahmen im Verhältnis zur Wirtschaftsleistung,\nTourismus (WTTC): Gesamtbeitrag zur Bruttowertschöpfung (Prozent),Lockdown-Stringenz: Index, Durchschnitt in 2020H1, höhere Werte = strengere Maßnahmen, \nschwarze Linie: linearer Trend.Quelle: OECD Main Economic Indicators, Deutsche Bundesbank, ECDC, IMF International Financial Statistics,\nHale et al. (2020), World Travel and Trade Council, Weltbank World Development Indicators."))+
+              subtitle = "Zusammenhang mit Covid-19, Grad der Offenheit, Lockdown-Stringenz, Wirtschaftsstruktur, Bedeutung des Tourismus und Mobilitätsdaten",
+              caption = txt_caption)+
         theme_minimal()+
-        theme(legend.title = element_blank(), legend.position = "top", legend.text=element_text(size=9))
+        theme(legend.title = element_blank(), legend.position = "top", legend.text=element_text(size=9),
+              plot.caption = element_text(size = 6),
+              plot.subtitle = element_text(size = 10))
 ```
+
+Export to pdf
 
 ```{r}
 ggsave(
-  filename = "Abb_BIPH1_verschiedeneIndikatoren.pdf",
+  filename = "Abb_BIPH1.pdf",
   plot = last_plot(),
   device = "pdf",
   path = NULL,
@@ -514,84 +539,4 @@ ggsave(
 
 
 
-## Google mobility data vs. GDP in 2020H1
 
-```{r}
-df %>% filter(var %in% c("retail_rec", "transit", "workplace"),
-              country != "China") %>%
-        mutate(status = ifelse(country %in% list_EME, "Schwellenländer", "fortgeschrittene Volkswirtschaften"),
-               var = fct_recode(var, "retail and recreation" = "retail_rec", 
-                                                    "transit stations" = "transit", 
-                                                    "workplace" = "workplace"),
-               value = value + 100
-               ) %>%
-  ggplot(aes(x = value, y = gdpH1, color = var))+
-  geom_point(size = 3)+
-  geom_text(data = filter(df_R2, var %in% c("retail and recreation", "transit stations", "workplace")), 
-            aes(x = x, y = y, label = R2), size = 4)+
-  geom_smooth(method = "lm", se = FALSE)+
-  theme_minimal()+
-  theme(legend.title = element_blank(), legend.position = "top", legend.text=element_text(size=9))+
-  labs(y = "BIP, Prozent", x = "Mobilitätsdaten, Durchschnitt 2020H1",
-       title = "Covid-19-Pandemie: wirtschaftliche Entwicklung in 2020H1",
-       subtitle = "Zusammenhang mit Google-Mobilitätsdaten ",
-              caption = paste0("Daten für ", length(unique(df$country)) - 1 , " Länder, BIP: Veränderung zwischen 2020Q2 und 2019Q4, Mobilitätsdaten: Median zwischen 3. Januar und 6. Februar = 100.\n Linien: linearer Trend. Quelle: OECD Main Economic Indicators, Deutsche Bundesbank, Google Covid-19 Community Mobility Report."))
-```
-
-```{r}
-ggsave(
-  filename = "Abb_BIPH1_Google.pdf",
-  plot = last_plot(),
-  device = "pdf",
-  path = NULL,
-  scale = 1,
-  width = 25,
-  height = 20,
-  units = c("cm"),
-  dpi = 300,
-  limitsize = TRUE,
-)
-```
-
-## OECD data on economic structure vs. growth in 2020H1
-
-
-```{r}
-df %>% filter(var %in% c("G.I", "R.U"),
-              country != "China") %>%
-        mutate(status = ifelse(country %in% list_EME, "Schwellenländer", "fortgeschrittene Volkswirtschaften"),
-               var = fct_recode(var, "trade, transport, accommodation" = "G.I", 
-                                     "arts, entertainment, recreation" = "R.U"
-                                )
-               ) -> df_plot
-
-  ggplot(df_plot,aes(x = value, y = gdpH1))+
-  geom_point()+
-  facet_wrap(~var, nrow = 1, scales = "free_x")+
-  geom_smooth(method = "lm", se = FALSE, color = "black", size = 0.5)+
-  geom_text(data = filter(df_R2, var %in% c("trade, transport, accommodation", "arts, entertainment, recreation")),
-                   mapping = aes(x = x, y = y, label = R2))+
-  geom_point(aes(color = status), size = 3)+
-  ylim(c(-25, 0))+
-  facet_wrap(~var, scales = "free_x")+
-  labs(y = "BIP, Prozent", x = "",
-      title = "Covid-19-Pandemie: wirtschaftliche Entwicklung in 2020H1",
-      subtitle = "Zusammenhang mit Wirtschaftsstruktur ",
-      caption = paste0("Daten für ", length(unique(df_plot$country)) - 1 , " Länder, BIP: Veränderung zwischen 2020Q2 und 2019Q4, Anteil an der Bruttowertschöpfung.Quelle: OECD National Accounts."))+
-        theme_minimal()+
-        theme(legend.title = element_blank(), legend.position = "top", legend.text=element_text(size=9))
-```
-```{r}
-ggsave(
-  filename = "Abb_BIPH1_Bereiche.pdf",
-  plot = last_plot(),
-  device = "pdf",
-  path = NULL,
-  scale = 1,
-  width = 25,
-  height = 20,
-  units = c("cm"),
-  dpi = 300,
-  limitsize = TRUE,
-)
-```

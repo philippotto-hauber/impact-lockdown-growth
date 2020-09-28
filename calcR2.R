@@ -47,48 +47,21 @@ calcR2 <- function(df)
                                        y = -7.5)
       )
   
-      ind_var <- df$var == "retail_rec"
+      ind_var <- df$var == "mobility"
       modl <- lm(df$gdpH1[ind_var] ~ df$value[ind_var])
-      df_R2 <- rbind(df_R2, data.frame(var = "retail and recreation",
+      df_R2 <- rbind(df_R2, data.frame(var = "Mobilitätsdaten",
                                        R2 = paste0("R^2 = ", format(round(summary(modl)$r.squared, 2), nsmall = 2)),
                                        x = 70,
                                        y = -21)
       )
       
-      
-      ind_var <- df$var == "transit"
+      ind_var <- df$var == "structure"
       modl <- lm(df$gdpH1[ind_var] ~ df$value[ind_var])
-      df_R2 <- rbind(df_R2, data.frame(var = "transit stations",
-                                       R2 = paste0("R^2 = ", format(round(summary(modl)$r.squared, 2), nsmall = 2)),
-                                       x = 77,
-                                       y = -21)
-      )
-      
-      ind_var <- df$var == "workplace"
-      modl <- lm(df$gdpH1[ind_var] ~ df$value[ind_var])
-      df_R2 <- rbind(df_R2, data.frame(var = "workplace",
-                                       R2 = paste0("R^2 = ", format(round(summary(modl)$r.squared, 2), nsmall = 2)),
-                                       x = 84,
-                                       y = -21)
-      )
-      
-      ind_var <- df$var == "G.I"
-      modl <- lm(df$gdpH1[ind_var] ~ df$value[ind_var])
-      df_R2 <- rbind(df_R2,data.frame(var = "trade, transport, accommodation",
+      df_R2 <- rbind(df_R2,data.frame(var = "Dienstleistungsbereiche",
                                       R2 = paste0("R^2 = ", format(round(summary(modl)$r.squared, 2), nsmall = 2)),
                                       x = 24,
                                       y = -2.5)
       )
-      
-      ind_var <- df$var == "R.U"
-      modl <- lm(df$gdpH1[ind_var] ~ df$value[ind_var])
-      df_R2 <- rbind(df_R2,
-                     data.frame(var = "arts, entertainment, recreation",
-                                R2 = paste0("R^2 = ", format(round(summary(modl)$r.squared, 2), nsmall = 2)),
-                                x = 4.5,
-                                y = -2.5
-                     )
-      )
-  
+
     return(df_R2)
 }
