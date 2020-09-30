@@ -439,6 +439,10 @@ df %>% select(-c(dev_gdp)) %>%
             ) -> df_plot
 ```
 
+Change status of Germany so that it shows up in different color and legend!
+```{r}
+df_plot$status[df_plot$country == "Germany"] <- "Deutschland"
+```
 
 caption text
 
@@ -471,6 +475,54 @@ Export to pdf
 ```{r}
 ggsave(
   filename = "Abb_BIPH1.pdf",
+  plot = last_plot(),
+  device = "pdf",
+  path = NULL,
+  scale = 1,
+  width = 25,
+  height = 20,
+  units = c("cm"),
+  dpi = 300,
+  limitsize = TRUE,
+)
+```
+
+
+## Plot GDP in 2020H1 vs subset of indicators
+
+```{r}
+subset_indicators <- c("Covid-19-Todesfälle", "Offenheit", "Wirtschaftsstruktur", "Lockdown-Stringenz")
+```
+
+new caption
+
+```{r}
+txt_caption <- paste0("Daten für ", length(unique(df_plot$country)), " Länder, BIP: Veränderung zwischen 2020Q2 und 2019Q4; Infektions- und Todesfälle: kumuliert, je 1 Mio. Einwohner, Stand 30.6.2020; Offenheit: Summe der Exporte und Importe im Verhältnis zur Wirtschaftsleistung;\nLockdown-Stringenz: Index, Durchschnitt in 2020H1, höhere Werte = strengere Maßnahmen;Wirtschaftsstruktur: Wertschöpfungsanteile der Bereiche Transport, Handel, Gast- und Freizeitgewerbe;\nschwarze Linie = linearer Trend, r = Korrelationskoeffizienz, ***, **, *: 1, 5, 10-Prozent Signifikanzniveau. Quelle: OECD Main Economic Indicators, Deutsche Bundesbank, ECDC, IMF International Financial Statistics, Hale et al. (2020).")
+```
+
+```{r}
+       ggplot(filter(df_plot, var %in% subset_indicators), aes(x = value, y = gdpH1))+
+         geom_point()+
+         geom_text(data = filter(df_R2, var %in% subset_indicators),
+                  mapping = aes(x = x, y = y, label = text), size = 4)+
+         geom_smooth(method = "lm", se = FALSE, color = "black", size = 0.5)+
+          geom_point(aes(color = status), size = 2)+
+         scale_color_manual(values=c("#000000", "#00BFC4", "#FA8072"))+
+         facet_wrap(~var, scales = "free_x", nrow = 2)+
+         labs(y = "BIP, Prozent", x = "",
+              title = "Covid-19-Pandemie: wirtschaftliche Entwicklung in 2020H1",
+              subtitle = "Zusammenhang mit Covid-19-Todesfällen, Grad der Offenheit, Lockdown-Stringenz, und Wirtschaftsstruktur",
+              caption = txt_caption)+
+        theme_minimal()+
+        theme(legend.title = element_blank(), legend.position = "top", legend.text=element_text(size=9),
+              plot.caption = element_text(size = 6),
+              plot.subtitle = element_text(size = 10))
+```
+Export to pdf
+
+```{r}
+ggsave(
+  filename = "Abb_BIPH1_subset.pdf",
   plot = last_plot(),
   device = "pdf",
   path = NULL,
