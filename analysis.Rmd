@@ -395,6 +395,12 @@ Gather into `var` and `value`
 df <- gather(df, var, value, -c(country, gdpH1, dev_gdp))
 ```
 
+Save workspace
+
+```{r}
+save(list = ls(), file = "workspace.Rda")
+#load("workspace.Rda")
+```
 
 # Plot
 
@@ -409,8 +415,8 @@ list_EME <- c("Brazil", "Mexico", "Turkey",
 Calculate R^2 using function `calcR2.R`
 
 ```{r}
-source("calcR2.R")
-df_R2 <- calcR2(filter(df, country != "China"))
+source("calcrR2pval.R")
+df_R2 <- calcrR2pval(filter(df, country != "China"))
 ```
 
 ## Plot GDP in 2020H1 vs various indicators
@@ -429,7 +435,7 @@ df %>% select(-c(dev_gdp)) %>%
                                               "Covid-19-Infektionen" = "covid19cases",
                                               "Covid-19-Todesfälle" = "covid19deaths",
                                               "Mobilitätsdaten" = "retail_rec",
-                                              "Dienstleistungsbereiche" = "structure")
+                                              "Wirtschaftsstruktur" = "structure")
             ) -> df_plot
 ```
 
@@ -444,8 +450,8 @@ txt_caption <- paste0("Daten für ", length(unique(df_plot$country)), " Länder,
 df_plot$status[df_plot$country == "Germany"] <- "Deutschland"
        ggplot(df_plot, aes(x = value, y = gdpH1))+
          geom_point()+
-         geom_text(data = filter(df_R2, var %in% c("Lockdown-Stringenz", "Offenheit", "Tourismus (WTTC)", "Tourismus (Weltbank)", "Covid-19-Infektionen", "Covid-19-Todesfälle", "Dienstleistungsbereiche", "Mobilitätsdaten")),
-                  mapping = aes(x = x, y = y, label = R2), size = 3)+
+         geom_text(data = filter(df_R2, var %in% c("Lockdown-Stringenz", "Offenheit", "Tourismus (WTTC)", "Tourismus (Weltbank)", "Covid-19-Infektionen", "Covid-19-Todesfälle", "Wirtschaftsstruktur", "Mobilitätsdaten")),
+                  mapping = aes(x = x, y = y, label = text), size = 3)+
          geom_smooth(method = "lm", se = FALSE, color = "black", size = 0.5)+
           geom_point(aes(color = status), size = 2)+
          scale_color_manual(values=c("#000000", "#00BFC4", "#FA8072"))+
@@ -475,24 +481,6 @@ ggsave(
   dpi = 300,
   limitsize = TRUE,
 )
-```
-
-
-# Calculate R², correlation coefficient and p value of regression coefficient
-```{r}
-
-df_reg <- data.frame()
-
-for (var in unique(df$var))
-{
-  ind_var <- df$var == var & df$country != "China"
-  modl <- lm(df$gdpH1[ind_var] ~ df$value[ind_var])
-  sum_modl <- summary(modl)
-  r2 <- format(round(sum_modl$r.squared,2), nsmall = 2)
-  rho <- format(round(cor(df$gdpH1[ind_var], df$value[ind_var], use = "pairwise.complete.obs"), 2), nsmall = 2)
-  pval <- format(round(sum_modl$coefficients[2,4], 2), nsmall = 2)
-  df_reg <- rbind(df_reg, data.frame(var = var, r2 = r2, rho = rho, pval = pval))
-}
 ```
 
 
