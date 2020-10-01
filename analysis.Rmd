@@ -398,8 +398,8 @@ df <- gather(df, var, value, -c(country, gdpH1, dev_gdp))
 Save workspace
 
 ```{r}
-save(list = ls(), file = "workspace.Rda")
-#load("workspace.Rda")
+#save(list = ls(), file = "workspace.Rda")
+load("workspace.Rda")
 ```
 
 # Plot
@@ -535,5 +535,14 @@ ggsave(
 )
 ```
 
+Export to data csv
 
+```{r}
+write.csv2(filter(df_plot, var %in% subset_indicators), file = "data_out.csv", row.names = FALSE, na = "#NV")
+```
 
+Export correlation coefficients to csv
+
+```{r}
+write.csv2(df_R2, file = "corr_out.csv", row.names = FALSE, na = "#NV")
+```
