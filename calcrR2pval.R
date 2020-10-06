@@ -52,8 +52,12 @@ calcrR2pval <- function(df)
       ind_var <- df$var == "mobility"
       df_R2 <- rbind(df_R2, add_row_to_df(df$gdpH1[ind_var], df$value[ind_var], "Mobilitätsdaten", 70, -21))
       
-      ind_var <- df$var == "structure"
-      df_R2 <- rbind(df_R2, add_row_to_df(df$gdpH1[ind_var], df$value[ind_var], "Wirtschaftsstruktur", 25, -5))
+      ind_var <- df$var == "services"
+      df_R2 <- rbind(df_R2, add_row_to_df(df$gdpH1[ind_var], df$value[ind_var], "Dienstleistungen", 25, -5))
+      
+      ind_var <- df$var == "manufacturing"
+      df_R2 <- rbind(df_R2, add_row_to_df(df$gdpH1[ind_var], df$value[ind_var], "Verarb. Gewerbe", 25, -5))
+      
       
 
       return(df_R2)

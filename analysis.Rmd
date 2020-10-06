@@ -383,7 +383,9 @@ GVA by sectors, source: OECD
 ```{r}
 oecd_sect_raw <- read.xlsx(xlsxFile = "./IWH1.xlsx", sheet = "OECD Data")
 
-oecd_sect_raw %>% select(codes, G.I = `G-I`, R.U = `R-U`) %>% mutate(structure = G.I + R.U) -> oecd_sect
+oecd_sect_raw %>% select(codes, G.I = `G-I`, R.U = `R-U`, C = C) %>% 
+                  mutate(services = G.I + R.U,
+                         manufacturing = C) -> oecd_sect
 ```
 
 ```{r}
@@ -398,8 +400,8 @@ df <- gather(df, var, value, -c(country, gdpH1, dev_gdp))
 Save workspace
 
 ```{r}
-#save(list = ls(), file = "workspace.Rda")
-load("workspace.Rda")
+save(list = ls(), file = "workspace.Rda")
+#load("workspace.Rda")
 ```
 
 # Plot
@@ -425,7 +427,7 @@ df_R2 <- calcrR2pval(filter(df, country != "China"))
 
 ```{r}
 df %>% select(-c(dev_gdp)) %>% 
-       filter(var %in% c("stringency", "openness", "traveltourism","tourism", "covid19cases", "covid19deaths", "structure", "retail_rec"),
+       filter(var %in% c("stringency", "openness", "traveltourism","tourism", "covid19cases", "covid19deaths", "services", "retail_rec"),
               country != "China") %>% 
        mutate(status = ifelse(country %in% list_EME, "Schwellenländer", "fortgeschrittene Volkswirtschaften"),
               var = fct_recode(var, "Lockdown-Stringenz" = "stringency", 
@@ -435,7 +437,7 @@ df %>% select(-c(dev_gdp)) %>%
                                               "Covid-19-Infektionen" = "covid19cases",
                                               "Covid-19-Todesfälle" = "covid19deaths",
                                               "Mobilitätsdaten" = "retail_rec",
-                                              "Wirtschaftsstruktur" = "structure")
+                                              "Dienstleistungen" = "services")
             ) -> df_plot
 ```
 
@@ -454,7 +456,7 @@ txt_caption <- paste0("Daten für ", length(unique(df_plot$country)), " Länder,
 df_plot$status[df_plot$country == "Germany"] <- "Deutschland"
        ggplot(df_plot, aes(x = value, y = gdpH1))+
          geom_point()+
-         geom_text(data = filter(df_R2, var %in% c("Lockdown-Stringenz", "Offenheit", "Tourismus (WTTC)", "Tourismus (Weltbank)", "Covid-19-Infektionen", "Covid-19-Todesfälle", "Wirtschaftsstruktur", "Mobilitätsdaten")),
+         geom_text(data = filter(df_R2, var %in% c("Lockdown-Stringenz", "Offenheit", "Tourismus (WTTC)", "Tourismus (Weltbank)", "Covid-19-Infektionen", "Covid-19-Todesfälle", "Dienstleistungen", "Mobilitätsdaten")),
                   mapping = aes(x = x, y = y, label = text), size = 3)+
          geom_smooth(method = "lm", se = FALSE, color = "black", size = 0.5)+
           geom_point(aes(color = status), size = 2)+
@@ -491,7 +493,7 @@ ggsave(
 ## Plot GDP in 2020H1 vs subset of indicators
 
 ```{r}
-subset_indicators <- c("Covid-19-Todesfälle", "Offenheit", "Wirtschaftsstruktur", "Lockdown-Stringenz")
+subset_indicators <- c("Covid-19-Todesfälle", "Offenheit", "Dienstleistungen", "Lockdown-Stringenz")
 ```
 
 new caption
